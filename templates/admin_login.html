@@ -1,0 +1,19 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="row">
+    <div class="col-md-4 offset-md-4">
+        <h4 class="mb-4 text-center">دخول لوحة التحكم</h4>
+
+        {% if error %}
+            <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+
+        <form method="post">
+            <input type="password" name="password" class="form-control mb-3" placeholder="كلمة المرور" required autofocus>
+            <button class="btn btn-primary w-100">دخول</button>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

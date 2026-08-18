@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="row">
+    <div class="col-md-5 offset-md-3">
+        <h4 class="mb-4">إعدادات المحل</h4>
+
+        {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+        {% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+
+        <form method="post">
+            <label class="form-label">اسم المحل</label>
+            <input type="text" name="store_name" class="form-control mb-3" value="{{ store_name }}" required>
+
+            <label class="form-label">رقم الواتساب (مع كود الدولة، بدون + أو مسافات)</label>
+            <input type="text" name="store_whatsapp" class="form-control mb-3" value="{{ current_whatsapp }}" placeholder="مثال: 218912345678" required>
+
+            <button class="btn btn-primary w-100">حفظ</button>
+        </form>
+
+        <a href="{{ url_for('admin') }}" class="btn btn-link mt-2">رجوع للوحة التحكم</a>
+    </div>
+</div>
+
+{% endblock %}

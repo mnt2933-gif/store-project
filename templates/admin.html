@@ -1,0 +1,64 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3>لوحة تحكم المحل</h3>
+    <div>
+        <a href="{{ url_for('admin_settings') }}" class="btn btn-outline-secondary btn-sm">إعدادات المحل</a>
+        <a href="{{ url_for('admin_change_password') }}" class="btn btn-outline-secondary btn-sm">تغيير كلمة المرور</a>
+        <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-danger btn-sm">تسجيل خروج</a>
+    </div>
+</div>
+
+<h5>إضافة جهاز جديد</h5>
+<form method="post" action="{{ url_for('admin_add') }}" enctype="multipart/form-data" class="row g-2 mb-5">
+    <div class="col-md-3"><input name="name" class="form-control" placeholder="اسم الجهاز" required></div>
+    <div class="col-md-2"><input name="brand" class="form-control" placeholder="الماركة" required></div>
+    <div class="col-md-2">
+        <select name="category" class="form-select">
+            <option value="phone">هاتف</option>
+            <option value="laptop">لابتوب</option>
+        </select>
+    </div>
+    <div class="col-md-2"><input name="price" type="number" class="form-control" placeholder="السعر" required></div>
+    <div class="col-md-3"><input name="specs" class="form-control" placeholder="المواصفات"></div>
+    <div class="col-md-4"><input name="image_file" type="file" accept="image/*" class="form-control"></div>
+    <div class="col-md-2 form-check mt-2">
+        <input type="checkbox" name="available" class="form-check-input" checked>
+        <label class="form-check-label">متوفر</label>
+    </div>
+    <div class="col-md-2"><button class="btn btn-success w-100">إضافة</button></div>
+</form>
+
+<h5>المنتجات الحالية</h5>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>الاسم</th><th>الماركة</th><th>السعر</th><th>الحالة</th><th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for p in products %}
+        <tr>
+            <td>{{ p['name'] }}</td>
+            <td>{{ p['brand'] }}</td>
+            <td>{{ p['price'] }} د.ل</td>
+            <td>
+                <form method="post" action="{{ url_for('admin_toggle', product_id=p['id']) }}" class="d-inline">
+                    <button class="btn btn-sm {% if p['available'] %}btn-success{% else %}btn-secondary{% endif %}">
+                        {% if p['available'] %}متوفر{% else %}غير متوفر{% endif %}
+                    </button>
+                </form>
+            </td>
+            <td>
+                <form method="post" action="{{ url_for('admin_delete', product_id=p['id']) }}" class="d-inline"
+                      onsubmit="return confirm('متأكد تبي تحذف {{ p['name'] }}؟');">
+                    <button class="btn btn-sm btn-danger">حذف</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

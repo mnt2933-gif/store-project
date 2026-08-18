@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<form class="row g-2 mb-4" method="get">
+    <div class="col-md-4">
+        <input type="text" name="q" class="form-control" placeholder="ابحث عن جهاز..." value="{{ selected_q }}">
+    </div>
+    <div class="col-md-3">
+        <select name="brand" class="form-select">
+            <option value="">كل الماركات</option>
+            {% for b in brands %}
+                <option value="{{ b['brand'] }}" {% if b['brand'] == selected_brand %}selected{% endif %}>{{ b['brand'] }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select name="category" class="form-select">
+            <option value="">الكل</option>
+            <option value="phone" {% if selected_category == 'phone' %}selected{% endif %}>هواتف</option>
+            <option value="laptop" {% if selected_category == 'laptop' %}selected{% endif %}>لابتوبات</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary w-100" type="submit">فلترة</button>
+    </div>
+</form>
+
+<div class="row">
+    {% for p in products %}
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 {% if not p['available'] %}opacity-50{% endif %}">
+            {% if p['image_url'] %}
+                <img src="{{ p['image_url'] }}" class="card-img-top" alt="{{ p['name'] }}" style="height: 200px; object-fit: contain; padding: 10px;">
+            {% endif %}
+            <div class="card-body">
+                <h5 class="card-title">{{ p['name'] }}</h5>
+                <h6 class="card-subtitle mb-2 text-muted">{{ p['brand'] }}</h6>
+                <p class="card-text">{{ p['specs'] }}</p>
+                <p class="fw-bold">{{ p['price'] }} د.ل</p>
+                {% if p['available'] %}
+                    <span class="badge bg-success mb-2">متوفر</span>
+                {% else %}
+                    <span class="badge bg-secondary mb-2">غير متوفر</span>
+                {% endif %}
+                <a href="{{ url_for('product_detail', product_id=p['id']) }}" class="btn btn-outline-primary w-100">التفاصيل</a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <p class="text-center text-muted">ما فيه نتائج مطابقة.</p>
+    {% endfor %}
+</div>
+
+{% endblock %}
