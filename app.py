@@ -359,3 +359,46 @@ if __name__ == "__main__":
     else:
         init_db()
     app.run(debug=True)
+
+# ---------- API Endpoint لربط المنظومة المباشر ----------
+
+# مفتاح أمان افتراضي للـ API (يمكن تغييره لكل محل)
+API_SECRET_KEY = "libya-tech-api-secret-key-2026"
+
+@app.route('/api/v1/update-stock', methods=['POST'])
+def api_update_stock():
+    # التحقق من مفتاح الأمان المرسل في الـ Header أو البيانات
+    provided_key = request.headers.get('X-API-KEY') or request.json.get('api_key') if request.is_json else None
+    
+    if provided_key != API_SECRET_KEY:
+        return {"status": "error", "message": "Unauthorized: Invalid API Key"}, 401
+
+    data = request.get_json()
+    if not data:
+        return {"status": "error", "message": "No JSON data provided"}, 400
+
+    db = get_db()
+    
+    # استقبال تحديث منتج معين بناءً على الاسم أو الـ ID
+    product_id = data.get('product_id')
+    product_name = data.get('name')
+    new_price = data.get('price')
+    available = data.get('available') # 1 للمتوفر، 0 للغير متوفر
+
+    try:
+        if product_id:
+            if new_price is not None:
+                db.execute("UPDATE products SET price = ? WHERE id = ?", (new_price, product_id))
+            if available is not None:
+                db.execute("UPDATE products SET available = ? WHERE id = ?", (available, product_id))
+        elif product_name:
+            if new_price is not None:
+                db.execute("UPDATE products SET price = ? WHERE name = ?", (new_price, product_name))
+            if available is not None:
+                db.execute("UPDATE products SET available = ? WHERE name = ?", (available, product_name))
+        
+        db.commit()
+        return {"status": "success", "message": "Stock/Price updated successfully!"}, 200
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}, 500
