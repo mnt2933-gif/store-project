@@ -1,545 +1,268 @@
-import csv
-from functools import wraps
-import io
 import os
 import sqlite3
-from flask import (
-    Flask,
-    flash,
-    g,
-    redirect,
-    render_template,
-    request,
-    session,
-    url_for,
-)
-from werkzeug.security import check_password_hash, generate_password_hash
-from werkzeug.utils import secure_filename
+import pandas as pd
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 
 app = Flask(__name__)
-app.secret_key = (
-    "change-this-secret-key-later"  # أي نص عشوائي، غيريه قبل التسليم النهائي
-)
 
-DATABASE = os.path.join(os.path.dirname(__file__), "store.db")
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "static", "uploads")
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+# إعداد قاعدة البيانات
+DB_NAME = "store.db"
 
-
-def allowed_file(filename):
-  return (
-      "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-  )
-
-
-# قيم افتراضية أول مرة يشتغل فيها الموقع
-DEFAULT_STORE_WHATSAPP = "218900000000"
-DEFAULT_STORE_NAME = "متجر تجريبي - Demo Store"
-DEFAULT_API_KEY = "libya-tech-api-secret-key-2026"
-
-# كلمة مرور لوحة التحكم
-ADMIN_PASSWORD = "admin123"
-
-
-def login_required(f):
-
-  @wraps(f)
-  def decorated(*args, **kwargs):
-    if not session.get("logged_in"):
-      return redirect(url_for("admin_login"))
-    return f(*args, **kwargs)
-
-  return decorated
-
-
-# ---------- إدارة قاعدة البيانات ----------
-
-
-def get_db():
-  db = getattr(g, "_database", None)
-  if db is None:
-    db = g._database = sqlite3.connect(DATABASE)
-    db.row_factory = sqlite3.Row
-  return db
-
-
-@app.teardown_appcontext
-def close_connection(exception):
-  db = getattr(g, "_database", None)
-  if db is not None:
-    db.close()
-
+def get_db_connection():
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
-  with app.app_context():
-    db = get_db()
-    with open(os.path.join(os.path.dirname(__file__), "schema.sql")) as f:
-      db.executescript(f.read())
-    db.commit()
-
-    # نضيف بيانات تجريبية فقط إذا كان الجدول فاضي
-    count = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
-    if count == 0:
-      sample_products = [
-          (
-              "iPhone 13",
-              "Apple",
-              "phone",
-              3200,
-              "128GB - رام 4GB - كاميرا 12MP",
-              1,
-              "https://placehold.co/300x300?text=iPhone+13",
-          ),
-          (
-              "iPhone 15 Pro",
-              "Apple",
-              "phone",
-              6500,
-              "256GB - رام 8GB - كاميرا 48MP",
-              1,
-              "https://placehold.co/300x300?text=iPhone+15+Pro",
-          ),
-          (
-              "Samsung Galaxy S23",
-              "Samsung",
-              "phone",
-              4200,
-              "256GB - رام 8GB - شاشة AMOLED",
-              1,
-              "https://placehold.co/300x300?text=Galaxy+S23",
-          ),
-          (
-              "Samsung Galaxy A54",
-              "Samsung",
-              "phone",
-              1800,
-              "128GB - رام 6GB",
-              0,
-              "https://placehold.co/300x300?text=Galaxy+A54",
-          ),
-          (
-              "HP Pavilion 15",
-              "HP",
-              "laptop",
-              2900,
-              "Core i5 - رام 8GB - تخزين 512GB SSD",
-              1,
-              "https://placehold.co/300x300?text=HP+Pavilion",
-          ),
-          (
-              "Lenovo IdeaPad 3",
-              "Lenovo",
-              "laptop",
-              2100,
-              "Core i3 - رام 8GB - تخزين 256GB SSD",
-              1,
-              "https://placehold.co/300x300?text=IdeaPad+3",
-          ),
-          (
-              "MacBook Air M2",
-              "Apple",
-              "laptop",
-              8900,
-              "رام 8GB - تخزين 256GB SSD",
-              1,
-              "https://placehold.co/300x300?text=MacBook+Air",
-          ),
-          (
-              "Dell Inspiron 15",
-              "Dell",
-              "laptop",
-              2500,
-              "Core i5 - رام 8GB - تخزين 512GB SSD",
-              0,
-              "https://placehold.co/300x300?text=Dell+Inspiron",
-          ),
-      ]
-      db.executemany(
-          "INSERT INTO products (name, brand, category, price, specs,"
-          " available, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)",
-          sample_products,
-      )
-      db.commit()
-
-    # نضيف كلمة مرور افتراضية في جدول settings إذا ما كانت موجودة
-    existing = db.execute(
-        "SELECT value FROM settings WHERE key = 'admin_password_hash'"
-    ).fetchone()
-    if existing is None:
-      db.execute(
-          "INSERT INTO settings (key, value) VALUES (?, ?)",
-          ("admin_password_hash", generate_password_hash(ADMIN_PASSWORD)),
-      )
-      db.commit()
-
-    # نضيف الإعدادات الافتراضية
-    for key, default_value in [
-        ("store_whatsapp", DEFAULT_STORE_WHATSAPP),
-        ("store_name", DEFAULT_STORE_NAME),
-        ("api_secret_key", DEFAULT_API_KEY),
-    ]:
-      existing = db.execute(
-          "SELECT value FROM settings WHERE key = ?", (key,)
-      ).fetchone()
-      if existing is None:
-        db.execute(
-            "INSERT INTO settings (key, value) VALUES (?, ?)",
-            (key, default_value),
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # جدول المنتجات (مع إضافة عمود حالة الجهاز condition)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            price REAL NOT NULL,
+            category TEXT,
+            image TEXT,
+            available INTEGER DEFAULT 1,
+            condition TEXT DEFAULT 'جديد'
         )
-        db.commit()
+    ''')
+    # جدول الإعدادات
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
+    # إضافة القيم الافتراضية للإعدادات إن لم تكن موجودة
+    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('store_name', 'ليبيا تك - ليبيا')" )
+    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('store_whatsapp', '218910000000')")
+    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('api_secret_key', 'libya-tech-api-secret-key-2026')")
+    
+    # التأكد من وجود عمود condition في جدول المنتجات للأحوال القديمة
+    cursor.execute("PRAGMA table_info(products)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if 'condition' not in columns:
+        cursor.execute("ALTER TABLE products ADD COLUMN condition TEXT DEFAULT 'جديد'")
 
+    conn.commit()
+    conn.close()
 
-def get_admin_password_hash():
-  db = get_db()
-  row = db.execute(
-      "SELECT value FROM settings WHERE key = 'admin_password_hash'"
-  ).fetchone()
-  return row["value"] if row else None
+init_db()
 
+def get_settings():
+    conn = get_db_connection()
+    settings = dict(conn.execute("SELECT key, value FROM settings").fetchall())
+    conn.close()
+    return settings
 
-def get_setting(key, default=""):
-  db = get_db()
-  row = db.execute(
-      "SELECT value FROM settings WHERE key = ?", (key,)
-  ).fetchone()
-  return row["value"] if row else default
-
-
-def set_setting(key, value):
-  db = get_db()
-  db.execute("UPDATE settings SET value = ? WHERE key = ?", (value, key))
-  db.commit()
-
-
-# ---------- الصفحات الرئيسية (للزبون) ----------
-
-
-@app.route("/")
+# الصفحة الرئيسية للمتجر
+@app.route('/')
 def index():
-  db = get_db()
+    settings = get_settings()
+    conn = get_db_connection()
+    products = conn.execute("SELECT * FROM products WHERE available = 1").fetchall()
+    conn.close()
+    return render_template('index.html', products=products, store_name=settings.get('store_name'), whatsapp=settings.get('store_whatsapp'))
 
-  q = request.args.get("q", "").strip()
-  brand = request.args.get("brand", "")
-  category = request.args.get("category", "")
-  max_price = request.args.get("max_price", "")
-
-  query = "SELECT * FROM products WHERE 1=1"
-  params = []
-
-  if q:
-    query += " AND name LIKE ?"
-    params.append(f"%{q}%")
-  if brand:
-    query += " AND brand = ?"
-    params.append(brand)
-  if category:
-    query += " AND category = ?"
-    params.append(category)
-  if max_price:
-    query += " AND price <= ?"
-    params.append(max_price)
-
-  query += " ORDER BY available DESC, price ASC"
-  products = db.execute(query, params).fetchall()
-
-  brands = db.execute(
-      "SELECT DISTINCT brand FROM products ORDER BY brand"
-  ).fetchall()
-
-  return render_template(
-      "index.html",
-      products=products,
-      brands=brands,
-      store_name=get_setting("store_name", DEFAULT_STORE_NAME),
-      selected_brand=brand,
-      selected_category=category,
-      selected_q=q,
-      selected_max_price=max_price,
-  )
-
-
-@app.route("/product/<int:product_id>")
-def product_detail(product_id):
-  db = get_db()
-  product = db.execute(
-      "SELECT * FROM products WHERE id = ?", (product_id,)
-  ).fetchone()
-  if product is None:
-    return "المنتج غير موجود", 404
-
-  whatsapp_text = (
-      f"مرحباً، أنا مهتم بجهاز {product['name']} بسعر {product['price']} د.ل،"
-      " هل هو متوفر؟"
-  )
-  store_whatsapp = get_setting("store_whatsapp", DEFAULT_STORE_WHATSAPP)
-  whatsapp_link = f"https://wa.me/{store_whatsapp}?text={whatsapp_text}"
-
-  return render_template(
-      "product.html",
-      product=product,
-      store_name=get_setting("store_name", DEFAULT_STORE_NAME),
-      whatsapp_link=whatsapp_link,
-  )
-
-
-# ---------- لوحة التحكم (لصاحب المحل) ----------
-
-
-@app.route("/admin/login", methods=["GET", "POST"])
-def admin_login():
-  error = None
-  if request.method == "POST":
-    entered = request.form.get("password", "")
-    stored_hash = get_admin_password_hash()
-    if stored_hash and check_password_hash(stored_hash, entered):
-      session["logged_in"] = True
-      return redirect(url_for("admin"))
-    error = "كلمة المرور غلط، حاولي مرة ثانية"
-  return render_template(
-      "admin_login.html",
-      store_name=get_setting("store_name", DEFAULT_STORE_NAME),
-      error=error,
-  )
-
-
-@app.route("/admin/change-password", methods=["GET", "POST"])
-@login_required
-def admin_change_password():
-  error = None
-  success = None
-  if request.method == "POST":
-    current = request.form.get("current_password", "")
-    new1 = request.form.get("new_password", "")
-    new2 = request.form.get("new_password_confirm", "")
-    stored_hash = get_admin_password_hash()
-
-    if not check_password_hash(stored_hash, current):
-      error = "كلمة المرور الحالية غلط"
-    elif len(new1) < 4:
-      error = "كلمة المرور الجديدة قصيرة جداً"
-    elif new1 != new2:
-      error = "كلمة المرور الجديدة غير متطابقة"
-    else:
-      db = get_db()
-      db.execute(
-          "UPDATE settings SET value = ? WHERE key = 'admin_password_hash'",
-          (generate_password_hash(new1),),
-      )
-      db.commit()
-      success = "تم تغيير كلمة المرور بنجاح"
-
-  return render_template(
-      "admin_change_password.html",
-      store_name=get_setting("store_name", DEFAULT_STORE_NAME),
-      error=error,
-      success=success,
-  )
-
-
-@app.route("/admin/settings", methods=["GET", "POST"])
-@login_required
-def admin_settings():
-  error = None
-  success = None
-  if request.method == "POST":
-    new_name = request.form.get("store_name", "").strip()
-    new_whatsapp = request.form.get("store_whatsapp", "").strip()
-    new_api_key = request.form.get("api_secret_key", "").strip()
-
-    if not new_name or not new_whatsapp:
-      error = "الاسم والرقم مطلوبين"
-    elif not new_whatsapp.isdigit():
-      error = (
-          "رقم الواتساب لازم يكون أرقام بس (مع كود الدولة، مثلاً 218912345678)"
-      )
-    else:
-      set_setting("store_name", new_name)
-      set_setting("store_whatsapp", new_whatsapp)
-      if new_api_key:
-        set_setting("api_secret_key", new_api_key)
-      success = "تم حفظ الإعدادات بنجاح"
-
-  return render_template(
-      "admin_settings.html",
-      store_name=get_setting("store_name", DEFAULT_STORE_NAME),
-      current_whatsapp=get_setting("store_whatsapp", DEFAULT_STORE_WHATSAPP),
-      api_secret_key=get_setting("api_secret_key", DEFAULT_API_KEY),
-      error=error,
-      success=success,
-  )
-
-
-@app.route("/admin/upload-csv", methods=["POST"])
-@login_required
-def upload_csv():
-  file = request.files.get("file")
-  if not file:
-    return redirect(url_for("admin_settings"))
-
-  try:
-    stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-    csv_input = csv.DictReader(stream)
-    db = get_db()
-
-    for row in csv_input:
-      db.execute(
-          "INSERT INTO products (name, brand, category, price, specs,"
-          " available, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)",
-          (
-              row.get("name", "منتج جديد"),
-              row.get("brand", "عام"),
-              row.get("category", "phone"),
-              row.get("price", 0),
-              row.get("specs", ""),
-              1,
-              row.get(
-                  "image_url", "https://placehold.co/300x300?text=Product"
-              ),
-          ),
-      )
-    db.commit()
-    return redirect(url_for("admin_settings"))
-  except Exception as e:
-    return redirect(url_for("admin_settings"))
-
-
-@app.route("/admin/logout")
-def admin_logout():
-  session.pop("logged_in", None)
-  return redirect(url_for("admin_login"))
-
-
-@app.route("/admin")
-@login_required
+# لوحة التحكم الرئيسية (مع الإحصائيات)
+@app.route('/admin')
 def admin():
-  db = get_db()
-  products = db.execute("SELECT * FROM products ORDER BY id DESC").fetchall()
-  return render_template(
-      "admin.html",
-      products=products,
-      store_name=get_setting("store_name", DEFAULT_STORE_NAME),
-  )
+    conn = get_db_connection()
+    products = conn.execute("SELECT * FROM products").fetchall()
+    
+    # حساب الإحصائيات للـ Dashboard Stats
+    total_products = len(products)
+    available_products = sum(1 for p in products if p['available'] == 1)
+    unavailable_products = total_products - available_products
 
+    conn.close()
+    return render_template('admin.html', 
+                           products=products, 
+                           total_products=total_products,
+                           available_products=available_products,
+                           unavailable_products=unavailable_products)
 
-@app.route("/admin/add", methods=["POST"])
-@login_required
-def admin_add():
-  db = get_db()
+# إضافة منتج جديد
+@app.route('/admin/add', methods=['GET', 'POST'])
+def add_product():
+    if request.method == 'POST':
+        name = request.form['name']
+        price = request.form['price']
+        category = request.form['category']
+        image = request.form['image']
+        condition = request.form.get('condition', 'جديد')
 
-  image_url = request.form.get("image_url", "")
+        conn = get_db_connection()
+        conn.execute("INSERT INTO products (name, price, category, image, condition) VALUES (?, ?, ?, ?, ?)",
+                     (name, price, category, image, condition))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('admin'))
+    return render_template('add_product.html')
 
-  file = request.files.get("image_file")
-  if file and file.filename and allowed_file(file.filename):
-    filename = secure_filename(file.filename)
-    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-    filename = (
-        f"{db.execute('SELECT COUNT(*) FROM products').fetchone()[0] + 1}_{filename}"
-    )
-    file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
-    image_url = url_for("static", filename=f"uploads/{filename}")
+# تعديل منتج
+@app.route('/admin/edit/<int:id>', methods=['GET', 'POST'])
+def edit_product(id):
+    conn = get_db_connection()
+    product = conn.execute("SELECT * FROM products WHERE id = ?", (id,)).fetchone()
 
-  db.execute(
-      "INSERT INTO products (name, brand, category, price, specs, available,"
-      " image_url) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      (
-          request.form["name"],
-          request.form["brand"],
-          request.form["category"],
-          request.form["price"],
-          request.form["specs"],
-          1 if request.form.get("available") == "on" else 0,
-          image_url,
-      ),
-  )
-  db.commit()
-  return redirect(url_for("admin"))
+    if request.method == 'POST':
+        name = request.form['name']
+        price = request.form['price']
+        category = request.form['category']
+        image = request.form['image']
+        available = 1 if 'available' in request.form else 0
+        condition = request.form.get('condition', 'جديد')
 
+        conn.execute("UPDATE products SET name=?, price=?, category=?, image=?, available=?, condition=? WHERE id=?",
+                     (name, price, category, image, available, condition, id))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('admin'))
 
-@app.route("/admin/toggle/<int:product_id>", methods=["POST"])
-@login_required
-def admin_toggle(product_id):
-  db = get_db()
-  db.execute(
-      "UPDATE products SET available = 1 - available WHERE id = ?",
-      (product_id,),
-  )
-  db.commit()
-  return redirect(url_for("admin"))
+    conn.close()
+    return render_template('edit_product.html', product=product)
 
+# حذف منتج
+@app.route('/admin/delete/<int:id>')
+def delete_product(id):
+    conn = get_db_connection()
+    conn.execute("DELETE FROM products WHERE id = ?", (id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('admin'))
 
-@app.route("/admin/delete/<int:product_id>", methods=["POST"])
-@login_required
-def admin_delete(product_id):
-  db = get_db()
-  db.execute("DELETE FROM products WHERE id = ?", (product_id,))
-  db.commit()
-  return redirect(url_for("admin"))
+# صفحة طباعة ملصق الـ QR Code للمتجر
+@app.route('/admin/qr')
+def store_qr():
+    settings = get_settings()
+    store_url = request.host_url
+    return render_template('qr.html', store_name=settings.get('store_name'), store_url=store_url)
 
+# إعدادات المحل
+@app.route('/admin/settings', methods=['GET', 'POST'])
+def admin_settings():
+    settings = get_settings()
+    error = None
+    success = None
 
-# ---------- API Endpoint لربط المنظومة المباشر ----------
+    if request.method == 'POST':
+        store_name = request.form.get('store_name')
+        store_whatsapp = request.form.get('store_whatsapp')
+        api_secret_key = request.form.get('api_secret_key')
 
+        conn = get_db_connection()
+        conn.execute("UPDATE settings SET value = ? WHERE key = 'store_name'", (store_name,))
+        conn.execute("UPDATE settings SET value = ? WHERE key = 'store_whatsapp'", (store_whatsapp,))
+        conn.execute("UPDATE settings SET value = ? WHERE key = 'api_secret_key'", (api_secret_key,))
+        conn.commit()
+        conn.close()
 
-@app.route("/api/v1/update-stock", methods=["POST"])
+        success = "تم حفظ الإعدادات بنجاح!"
+        settings = get_settings()
+
+    return render_template('admin_settings.html',
+                           store_name=settings.get('store_name'),
+                           current_whatsapp=settings.get('store_whatsapp'),
+                           api_secret_key=settings.get('api_secret_key'),
+                           error=error,
+                           success=success)
+
+# رفع ملف CSV/Excel للمخزون
+@app.route('/admin/upload-csv', methods=['POST'])
+def upload_csv():
+    if 'file' not in request.files:
+        return redirect(url_for('admin_settings'))
+    file = request.files['file']
+    if file.filename == '':
+        return redirect(url_for('admin_settings'))
+
+    if file:
+        try:
+            if file.filename.endswith('.csv'):
+                df = pd.read_csv(file)
+            else:
+                df = pd.read_excel(file)
+
+            conn = get_db_connection()
+            for _, row in df.iterrows():
+                name = str(row.get('name', '')).strip()
+                price = float(row.get('price', 0))
+                category = str(row.get('category', 'عام')).strip()
+                image = str(row.get('image', '')).strip()
+                condition = str(row.get('condition', 'جديد')).strip()
+
+                if name:
+                    existing = conn.execute("SELECT id FROM products WHERE name = ?", (name,)).fetchone()
+                    if existing:
+                        conn.execute("UPDATE products SET price = ?, category = ?, condition = ? WHERE id = ?",
+                                     (price, category, condition, existing['id']))
+                    else:
+                        conn.execute("INSERT INTO products (name, price, category, image, condition) VALUES (?, ?, ?, ?, ?)",
+                                     (name, price, category, image, condition))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print("CSV Error:", e)
+
+    return redirect(url_for('admin'))
+
+# --------------------------------------------------
+# REST API (تحديث السعر والمخزون آلياً من المنظومة)
+# --------------------------------------------------
+@app.route('/api/v1/update-stock', methods=['POST'])
 def api_update_stock():
-  # قراءة مفتاح الأمان المسجل ديناميكياً من قاعدة البيانات
-  API_SECRET_KEY = get_setting("api_secret_key", DEFAULT_API_KEY)
+    settings = get_settings()
+    expected_key = settings.get('api_secret_key')
+    provided_key = request.headers.get('X-API-KEY')
 
-  provided_key = request.headers.get("X-API-KEY") or (
-      request.json.get("api_key") if request.is_json else None
-  )
+    if not provided_key or provided_key != expected_key:
+        return jsonify({"status": "error", "message": "Unauthorized: Invalid API Key"}), 401
 
-  if provided_key != API_SECRET_KEY:
-    return {"status": "error", "message": "Unauthorized: Invalid API Key"}, 401
+    data = request.get_json()
+    if not data:
+        return jsonify({"status": "error", "message": "Invalid JSON body"}), 400
 
-  data = request.get_json()
-  if not data:
-    return {"status": "error", "message": "No JSON data provided"}, 400
+    product_id = data.get('product_id')
+    product_name = data.get('name')
+    new_price = data.get('price')
+    available = data.get('available')
+    condition = data.get('condition')
 
-  db = get_db()
-
-  product_id = data.get("product_id")
-  product_name = data.get("name")
-  new_price = data.get("price")
-  available = data.get("available")
-
-  try:
+    conn = get_db_connection()
+    product = None
     if product_id:
-      if new_price is not None:
-        db.execute(
-            "UPDATE products SET price = ? WHERE id = ?", (new_price, product_id)
-        )
-      if available is not None:
-        db.execute(
-            "UPDATE products SET available = ? WHERE id = ?",
-            (available, product_id),
-        )
+        product = conn.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
     elif product_name:
-      if new_price is not None:
-        db.execute(
-            "UPDATE products SET price = ? WHERE name = ?",
-            (new_price, product_name),
-        )
-      if available is not None:
-        db.execute(
-            "UPDATE products SET available = ? WHERE name = ?",
-            (available, product_name),
-        )
+        product = conn.execute("SELECT * FROM products WHERE name = ?", (product_name,)).fetchone()
 
-    db.commit()
-    return {
-        "status": "success",
-        "message": "Stock/Price updated successfully!",
-    }, 200
+    if not product:
+        conn.close()
+        return jsonify({"status": "error", "message": "Product not found"}), 404
 
-  except Exception as e:
-    return {"status": "error", "message": str(e)}, 500
+    query = "UPDATE products SET "
+    params = []
 
+    if new_price is not None:
+        query += "price = ?, "
+        params.append(new_price)
+    if available is not None:
+        query += "available = ?, "
+        params.append(available)
+    if condition is not None:
+        query += "condition = ?, "
+        params.append(condition)
 
-# تشغيل التطبيق في النهاية تماماً
-if __name__ == "__main__":
-  if not os.path.exists(DATABASE):
-    init_db()
-  else:
-    init_db()
-  app.run(debug=True)
+    query = query.rstrip(', ') + " WHERE id = ?"
+    params.append(product['id'])
+
+    conn.execute(query, params)
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "success", "message": "Stock/Price updated successfully!"}), 200
+
+if __name__ == '__main__':
+    app.run(debug=True)
