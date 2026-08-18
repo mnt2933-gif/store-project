@@ -15,12 +15,17 @@
             <label class="form-label">رقم الواتساب (مع كود الدولة، بدون + أو مسافات)</label>
             <input type="text" name="store_whatsapp" class="form-control mb-3" value="{{ current_whatsapp }}" placeholder="مثال: 218912345678" required>
 
+            <!-- حقل مفتاح الـ API الجديد (مكان الصحيح داخل الـ form) -->
+            <label class="form-label mt-2">مفتاح الربط بالمنظومة (API Key)</label>
+            <input type="text" name="api_secret_key" class="form-control mb-3" value="{{ api_secret_key }}" placeholder="أدخل مفتاح أمان الـ API">
+
             <button class="btn btn-primary w-100">حفظ</button>
         </form>
 
         <a href="{{ url_for('admin') }}" class="btn btn-link mt-2">رجوع للوحة التحكم</a>
     </div>
 </div>
+
 <!-- قسم ربط المنظومة واستيراد البيانات -->
 <div class="card my-4 p-3 shadow-sm">
     <h5 class="card-title">🔗 ربط المنظومة واستيراد المنتجات</h5>
