@@ -1,9 +1,11 @@
 import sqlite3
 import os
+import csv
+import io
 from functools import wraps
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask import Flask, render_template, request, redirect, url_for, g, session
+from flask import Flask, render_template, request, redirect, url_for, g, session, flash
 
 app = Flask(__name__)
 app.secret_key = "change-this-secret-key-later"  # أي نص عشوائي، غيريه قبل التسليم النهائي
@@ -18,11 +20,11 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-# قيم افتراضية أول مرة يشتغل فيها الموقع (بعدها تُحفظ بقاعدة البيانات وتصير قابلة للتغيير من لوحة التحكم)
+# قيم افتراضية أول مرة يشتغل فيها الموقع
 DEFAULT_STORE_WHATSAPP = "218900000000"
 DEFAULT_STORE_NAME = "متجر تجريبي - Demo Store"
 
-# كلمة مرور لوحة التحكم - غيريها لكل محل تسلميله الموقع
+# كلمة مرور لوحة التحكم
 ADMIN_PASSWORD = "admin123"
 
 
@@ -88,7 +90,7 @@ def init_db():
             )
             db.commit()
 
-        # نضيف رقم الواتساب واسم المحل الافتراضيين إذا ما كانوا موجودين
+        # نضيف رقم الواتساب واسم المحل الافتراضيين
         for key, default_value in [
             ("store_whatsapp", DEFAULT_STORE_WHATSAPP),
             ("store_name", DEFAULT_STORE_NAME),
@@ -123,7 +125,6 @@ def set_setting(key, value):
 def index():
     db = get_db()
 
-    # قراءة فلاتر البحث من الرابط
     q = request.args.get("q", "").strip()
     brand = request.args.get("brand", "")
     category = request.args.get("category", "")
@@ -182,8 +183,6 @@ def product_detail(product_id):
 
 
 # ---------- لوحة التحكم (لصاحب المحل) ----------
-# ملاحظة: هذي نسخة ديمو بسيطة بدون تسجيل دخول.
-# قبل التسليم الفعلي لأي محل لازم نضيف حماية بكلمة مرور.
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
@@ -256,6 +255,38 @@ def admin_settings():
     )
 
 
+@app.route("/admin/upload-csv", methods=["POST"])
+@login_required
+def upload_csv():
+    file = request.files.get("file")
+    if not file:
+        return redirect(url_for("admin_settings"))
+
+    try:
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        csv_input = csv.DictReader(stream)
+        db = get_db()
+
+        for row in csv_input:
+            db.execute(
+                "INSERT INTO products (name, brand, category, price, specs, available, image_url) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    row.get("name", "منتج جديد"),
+                    row.get("brand", "عام"),
+                    row.get("category", "phone"),
+                    row.get("price", 0),
+                    row.get("specs", ""),
+                    1,
+                    row.get("image_url", "https://placehold.co/300x300?text=Product"),
+                ),
+            )
+        db.commit()
+        return redirect(url_for("admin_settings"))
+    except Exception as e:
+        return redirect(url_for("admin_settings"))
+
+
 @app.route("/admin/logout")
 def admin_logout():
     session.pop("logged_in", None)
@@ -277,12 +308,10 @@ def admin_add():
 
     image_url = request.form.get("image_url", "")
 
-    # لو رفع صاحب المحل صورة حقيقية، نحفظها ونستخدمها بدل الرابط
     file = request.files.get("image_file")
     if file and file.filename and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-        # نضيف رقم عشوائي بسيط لتفادي تكرار الاسم
         filename = f"{db.execute('SELECT COUNT(*) FROM products').fetchone()[0] + 1}_{filename}"
         file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
         image_url = url_for("static", filename=f"uploads/{filename}")
@@ -328,6 +357,5 @@ if __name__ == "__main__":
     if not os.path.exists(DATABASE):
         init_db()
     else:
-        # نتأكد إن الجدول موجود حتى لو الملف موجود
         init_db()
     app.run(debug=True)
