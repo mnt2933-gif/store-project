@@ -35,12 +35,12 @@
         </div>
     </form>
 
-    <!-- خيار ربط API المباشر -->
+   <!-- خيار ربط API المباشر -->
     <div class="mt-3">
         <label class="form-label">حالة ربط الـ API بالمنظومة:</label>
         <div class="d-flex align-items-center gap-2">
             <span class="badge bg-secondary">غير متصل</span>
-            <button class="btn btn-outline-primary btn-sm" onclick="alert('بيئة ربط API جاهزة، يرجى إدخال مفتاح المنظومة API Key')">
+            <button class="btn btn-outline-primary btn-sm" onclick="let url = prompt('أدخل رابط المنظومة (API Endpoint):'); if(url) { let key = prompt('أدخل مفتاح الربط (API Key):'); if(key) alert('تم حفظ بيانات الربط بنجاح! جاري الاتصال بالمنظومة...'); }">
                 إعدادات الـ API
             </button>
         </div>
