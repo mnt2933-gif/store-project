@@ -40,7 +40,14 @@
                 {{ p.condition }}
             </span>
 
-            <img src="{{ p.image }}" class="card-img-top p-3" style="height: 220px; object-fit: contain;">
+            <!-- عرض الصورة (سواء كانت مرفوعة محلياً أو رابط خارجي أو صورة افتراضية) -->
+            {% if p.image and p.image.startswith('http') %}
+                <img src="{{ p.image }}" class="card-img-top p-3" style="height: 220px; object-fit: contain;">
+            {% elif p.image %}
+                <img src="{{ url_for('static', filename=p.image) }}" class="card-img-top p-3" style="height: 220px; object-fit: contain;">
+            {% else %}
+                <img src="https://via.placeholder.com/200" class="card-img-top p-3" style="height: 220px; object-fit: contain;">
+            {% endif %}
             
             <div class="card-body d-flex flex-column">
                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -62,7 +69,7 @@
                            💬 اطلب عبر الواتساب
                         </a>
                         <button class="btn btn-outline-secondary btn-sm" onclick="toggleCompare('{{ p.name }}', '{{ p.price }}', '{{ p.storage }}', '{{ p.ram }}', '{{ p.condition }}', this)">
-                           ⚖️ إضافة للمقارنة
+                            ⚖️ إضافة للمقارنة
                         </button>
                     </div>
                 </div>
@@ -183,7 +190,6 @@
         `;
         tableBody.innerHTML = bodyHtml;
 
-        // فتح النافذة المنبثقة للـ Bootstrap بأمان
         var myModalEl = document.getElementById('compareModal');
         var modal = bootstrap.Modal.getInstance(myModalEl) || new bootstrap.Modal(myModalEl);
         modal.show();
