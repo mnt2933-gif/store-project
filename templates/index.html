@@ -15,9 +15,9 @@
 </div>
 
 <!-- شريط سري للمقارنة -->
-<div id="compareBar" class="alert alert-info d-none justify-content-between align-items-center mb-4">
-    <span>تم اختيار <span id="compareCount">0</span> هواتف للمقارنة.</span>
-    <button class="btn btn-primary btn-sm" onclick="showComparison()">عرض جدول المقارنة</button>
+<div id="compareBar" class="alert alert-info d-none justify-content-between align-items-center mb-4 shadow-sm">
+    <span>تم اختيار <span id="compareCount" class="fw-bold">0</span> هواتف للمقارنة.</span>
+    <button class="btn btn-primary btn-sm" onclick="showComparison()">عرض جدول المقارنة ⚖️</button>
 </div>
 
 <!-- قائمة المنتجات -->
@@ -30,10 +30,10 @@
          data-price="{{ p.price }}"
          data-condition="{{ p.condition }}">
         
-        <div class="card h-100 shadow-sm position-relative">
+        <div class="card h-100 shadow-sm position-relative border-0">
             
             <!-- شارة حالة الجهاز -->
-            <span class="position-absolute top-0 end-0 m-2 badge 
+            <span class="position-absolute top-0 end-0 m-2 badge shadow-sm
                 {% if p.condition == 'جديد' %}bg-success
                 {% elif p.condition == 'مستعمل' %}bg-warning text-dark
                 {% else %}bg-info text-dark{% endif %} p-2">
@@ -50,7 +50,7 @@
                     {% endif %}
                 </div>
                 
-                <h5 class="card-title fw-bold text-dark">{{ p.name }}</h5>
+                <h5 class="card-title fw-bold text-dark mb-3">{{ p.name }}</h5>
                 
                 <div class="mt-auto">
                     <h4 class="card-text text-primary fw-bold my-2">{{ p.price }} د.ل</h4>
@@ -78,23 +78,28 @@
 </div>
 
 <!-- نافذة عرض المقارنة -->
-<div class="modal fade" id="compareModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">جدول مقارنة الهواتف</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<div class="modal fade" id="compareModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content shadow">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">⚖️ جدول مقارنة الهواتف الذكية</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <table class="table table-bordered text-center" id="compareTable">
-            <thead>
-                <tr>
-                    <th>المواصفات</th>
-                </tr>
-            </thead>
-            <tbody>
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped text-center align-middle" id="compareTable">
+                <thead>
+                    <tr class="table-dark">
+                        <th>المواصفات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">إغلاق</button>
       </div>
     </div>
   </div>
@@ -119,7 +124,7 @@
         });
     });
 
-    // نظام المقارنة المبسط
+    // نظام المقارنة
     let compareList = [];
 
     function toggleCompare(name, price, storage, ram, condition, btn) {
@@ -133,7 +138,7 @@
             btn.innerText = '⚖️ إضافة للمقارنة';
         } else {
             if (compareList.length >= 3) {
-                alert('يمكنك مقارنة 3 هواتف كحد أقصى في نفس الوقت.');
+                alert('عذراً، يمكنك مقارنة 3 هواتف كحد أقصى في نفس الوقت.');
                 return;
             }
             compareList.push(item);
@@ -145,6 +150,7 @@
         let bar = document.getElementById('compareBar');
         let count = document.getElementById('compareCount');
         count.innerText = compareList.length;
+        
         if (compareList.length > 0) {
             bar.classList.remove('d-none');
             bar.classList.add('d-flex');
@@ -155,23 +161,32 @@
     }
 
     function showComparison() {
+        if (compareList.length === 0) {
+            alert('الرجاء اختيار هاتف واحد على الأقل للمقارنة.');
+            return;
+        }
+
         let tableHead = document.querySelector('#compareTable thead tr');
         let tableBody = document.querySelector('#compareTable tbody');
         
-        let headHtml = '<th>المواصفات</th>';
-        compareList.forEach(item => { headHtml += `<th>${item.name}</th>`; });
+        let headHtml = '<th class="table-dark">المواصفات</th>';
+        compareList.forEach(item => { 
+            headHtml += `<th class="text-primary">${item.name}</th>`; 
+        });
         tableHead.innerHTML = headHtml;
 
         let bodyHtml = `
-            <tr><td><b>السعر</b></td>${compareList.map(i => `<td>${i.price} د.ل</td>`).join('')}</tr>
-            <tr><td><b>الذاكرة</b></td>${compareList.map(i => `<td>${i.storage || '-'}</td>`).join('')}</tr>
-            <tr><td><b>الرام</b></td>${compareList.map(i => `<td>${i.ram || '-'}</td>`).join('')}</tr>
-            <tr><td><b>الحالة</b></td>${compareList.map(i => `<td>${i.condition}</td>`).join('')}</tr>
+            <tr><td><b>السعر</b></td>${compareList.map(i => `<td class="text-success fw-bold">${i.price} د.ل</td>`).join('')}</tr>
+            <tr><td><b>الذاكرة (Storage)</b></td>${compareList.map(i => `<td>${i.storage || 'غير متوفر'}</td>`).join('')}</tr>
+            <tr><td><b>الرام (RAM)</b></td>${compareList.map(i => `<td>${i.ram || 'غير متوفر'}</td>`).join('')}</tr>
+            <tr><td><b>حالة الجهاز</b></td>${compareList.map(i => `<td><span class="badge bg-info text-dark">${i.condition}</span></td>`).join('')}</tr>
         `;
         tableBody.innerHTML = bodyHtml;
 
-        var myModal = new bootstrap.Modal(document.getElementById('compareModal'));
-        myModal.show();
+        // فتح النافذة المنبثقة للـ Bootstrap بأمان
+        var myModalEl = document.getElementById('compareModal');
+        var modal = bootstrap.Modal.getInstance(myModalEl) || new bootstrap.Modal(myModalEl);
+        modal.show();
     }
 </script>
 
