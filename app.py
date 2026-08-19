@@ -110,36 +110,40 @@ def admin():
                            available_products=available_products,
                            unavailable_products=unavailable_products)
 
-# إضافة منتج جديد (معالجة آمنة للصور والبيانات)
+# إضافة منتج جديد مع كشف الأخطاء
 @app.route('/admin/add', methods=['GET', 'POST'])
 @requires_auth
 def add_product():
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        price = request.form.get('price', 0)
-        category = request.form.get('category', '').strip()
-        condition = request.form.get('condition', 'جديد')
-        storage = request.form.get('storage', '').strip()
-        ram = request.form.get('ram', '').strip()
+        try:
+            name = request.form.get('name', '').strip()
+            price = float(request.form.get('price', 0) or 0)
+            category = request.form.get('category', '').strip()
+            condition = request.form.get('condition', 'جديد')
+            storage = request.form.get('storage', '').strip()
+            ram = request.form.get('ram', '').strip()
 
-        image_path = ''
-        if 'image' in request.files:
-            file = request.files['image']
-            if file and file.filename != '':
-                filename = secure_filename(file.filename)
-                unique_filename = f"{uuid.uuid4()}_{filename}"
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
-                image_path = f"uploads/{unique_filename}"
+            image_path = ''
+            if 'image' in request.files:
+                file = request.files['image']
+                if file and file.filename != '':
+                    filename = secure_filename(file.filename)
+                    unique_filename = f"{uuid.uuid4()}_{filename}"
+                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
+                    image_path = f"uploads/{unique_filename}"
 
-        conn = get_db_connection()
-        conn.execute("INSERT INTO products (name, price, category, image, condition, storage, ram) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                     (name, price, category, image_path, condition, storage, ram))
-        conn.commit()
-        conn.close()
-        return redirect(url_for('admin'))
+            conn = get_db_connection()
+            conn.execute("INSERT INTO products (name, price, category, image, condition, storage, ram) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         (name, price, category, image_path, condition, storage, ram))
+            conn.commit()
+            conn.close()
+            return redirect(url_for('admin'))
+        except Exception as e:
+            return f"<h3>حدث خطأ أثناء الإضافة:</h3><p>{str(e)}</p>", 500
+
     return render_template('add_product.html')
 
-# تعديل منتج (معالجة آمنة تمنع الانهيار)
+# تعديل منتج مع كشف الأخطاء بالتفصيل
 @app.route('/admin/edit/<int:id>', methods=['GET', 'POST'])
 @requires_auth
 def edit_product(id):
@@ -151,28 +155,32 @@ def edit_product(id):
         return redirect(url_for('admin'))
 
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        price = request.form.get('price', 0)
-        category = request.form.get('category', '').strip()
-        available = 1 if 'available' in request.form else 0
-        condition = request.form.get('condition', 'جديد')
-        storage = request.form.get('storage', '').strip()
-        ram = request.form.get('ram', '').strip()
+        try:
+            name = request.form.get('name', '').strip()
+            price = float(request.form.get('price', 0) or 0)
+            category = request.form.get('category', '').strip()
+            available = 1 if 'available' in request.form else 0
+            condition = request.form.get('condition', 'جديد')
+            storage = request.form.get('storage', '').strip()
+            ram = request.form.get('ram', '').strip()
 
-        image_path = product['image'] if product['image'] else ''
-        if 'image' in request.files:
-            file = request.files['image']
-            if file and file.filename != '':
-                filename = secure_filename(file.filename)
-                unique_filename = f"{uuid.uuid4()}_{filename}"
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
-                image_path = f"uploads/{unique_filename}"
+            image_path = product['image'] if product['image'] else ''
+            if 'image' in request.files:
+                file = request.files['image']
+                if file and file.filename != '':
+                    filename = secure_filename(file.filename)
+                    unique_filename = f"{uuid.uuid4()}_{filename}"
+                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
+                    image_path = f"uploads/{unique_filename}"
 
-        conn.execute("UPDATE products SET name=?, price=?, category=?, image=?, available=?, condition=?, storage=?, ram=? WHERE id=?",
-                     (name, price, category, image_path, available, condition, storage, ram, id))
-        conn.commit()
-        conn.close()
-        return redirect(url_for('admin'))
+            conn.execute("UPDATE products SET name=?, price=?, category=?, image=?, available=?, condition=?, storage=?, ram=? WHERE id=?",
+                         (name, price, category, image_path, available, condition, storage, ram, id))
+            conn.commit()
+            conn.close()
+            return redirect(url_for('admin'))
+        except Exception as e:
+            conn.close()
+            return f"<h3>حدث خطأ أثناء التعديل (Exception):</h3><p>{str(e)}</p>", 500
 
     conn.close()
     return render_template('edit_product.html', product=product)
