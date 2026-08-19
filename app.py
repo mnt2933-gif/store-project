@@ -299,9 +299,6 @@ def api_update_stock():
 
     query = "UPDATE products SET "
     params = []
-
-    if new_ision = new_price is not None: # keep logic safe
-        pass
     
     if new_price is not None:
         query += "price = ?, "
