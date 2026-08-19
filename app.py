@@ -1,14 +1,20 @@
 import os
 import sqlite3
+import uuid
 import pandas as pd
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
+from werkzeug.utils import secure_filename
 from functools import wraps
 
 app = Flask(__name__)
 
+# مجلد حفظ الصور المرفوعة محلياً
+UPLOAD_FOLDER = 'static/uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 # --- إعدادات الحماية لوحة التحكم ---
 def check_auth(username, password):
-    # يمكنكِ تغيير اسم المستخدم وكلمة المرور من هنا
     return username == 'admin' and password == '123456' 
 
 def authenticate():
@@ -22,7 +28,6 @@ def requires_auth(f):
             return authenticate()
         return f(*args, **kwargs)
     return decorated
-# ---------------------------------
 
 # إعداد قاعدة البيانات
 DB_NAME = "store.db"
@@ -58,7 +63,6 @@ def init_db():
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('store_whatsapp', '218910000000')")
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('api_secret_key', 'libya-tech-api-secret-key-2026')")
     
-    # التأكد من وجود الأعمدة للقواعد القديمة
     cursor.execute("PRAGMA table_info(products)")
     columns = [col[1] for col in cursor.fetchall()]
     if 'condition' not in columns:
@@ -79,7 +83,7 @@ def get_settings():
     conn.close()
     return settings
 
-# الصفحة الرئيسية للمتجر (لا تحتاج حماية)
+# الصفحة الرئيسية للمتجر
 @app.route('/')
 def index():
     settings = get_settings()
@@ -88,7 +92,7 @@ def index():
     conn.close()
     return render_template('index.html', products=products, store_name=settings.get('store_name'), whatsapp=settings.get('store_whatsapp'))
 
-# لوحة التحكم الرئيسية (محمية)
+# لوحة التحكم الرئيسية
 @app.route('/admin')
 @requires_auth
 def admin():
@@ -106,7 +110,7 @@ def admin():
                            available_products=available_products,
                            unavailable_products=unavailable_products)
 
-# إضافة منتج جديد (محمية)
+# إضافة منتج جديد (يدعم رفع الصور من المعرض)
 @app.route('/admin/add', methods=['GET', 'POST'])
 @requires_auth
 def add_product():
@@ -114,20 +118,29 @@ def add_product():
         name = request.form['name']
         price = request.form['price']
         category = request.form['category']
-        image = request.form['image']
         condition = request.form.get('condition', 'جديد')
         storage = request.form.get('storage', '')
         ram = request.form.get('ram', '')
 
+        # معالجة رفع الصورة من المعرض
+        image_path = ''
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and file.filename != '':
+                filename = secure_filename(file.filename)
+                unique_filename = f"{uuid.uuid4()}_{filename}"
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
+                image_path = f"uploads/{unique_filename}"
+
         conn = get_db_connection()
         conn.execute("INSERT INTO products (name, price, category, image, condition, storage, ram) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                     (name, price, category, image, condition, storage, ram))
+                     (name, price, category, image_path, condition, storage, ram))
         conn.commit()
         conn.close()
         return redirect(url_for('admin'))
     return render_template('add_product.html')
 
-# تعديل منتج (محمية)
+# تعديل منتج (يدعم تغيير الصورة من المعرض)
 @app.route('/admin/edit/<int:id>', methods=['GET', 'POST'])
 @requires_auth
 def edit_product(id):
@@ -138,14 +151,22 @@ def edit_product(id):
         name = request.form['name']
         price = request.form['price']
         category = request.form['category']
-        image = request.form['image']
         available = 1 if 'available' in request.form else 0
         condition = request.form.get('condition', 'جديد')
         storage = request.form.get('storage', '')
         ram = request.form.get('ram', '')
 
+        image_path = product['image'] # الاحتفاظ بالصورة القديمة إن لم يتم اختيار صورة جديدة
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and file.filename != '':
+                filename = secure_filename(file.filename)
+                unique_filename = f"{uuid.uuid4()}_{filename}"
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
+                image_path = f"uploads/{unique_filename}"
+
         conn.execute("UPDATE products SET name=?, price=?, category=?, image=?, available=?, condition=?, storage=?, ram=? WHERE id=?",
-                     (name, price, category, image, available, condition, storage, ram, id))
+                     (name, price, category, image_path, available, condition, storage, ram, id))
         conn.commit()
         conn.close()
         return redirect(url_for('admin'))
@@ -153,7 +174,7 @@ def edit_product(id):
     conn.close()
     return render_template('edit_product.html', product=product)
 
-# حذف منتج (محمية)
+# حذف منتج
 @app.route('/admin/delete/<int:id>')
 @requires_auth
 def delete_product(id):
@@ -163,7 +184,7 @@ def delete_product(id):
     conn.close()
     return redirect(url_for('admin'))
 
-# صفحة طباعة ملصق الـ QR Code للمتجر (محمية)
+# صفحة طباعة ملصق الـ QR Code
 @app.route('/admin/qr')
 @requires_auth
 def store_qr():
@@ -171,7 +192,7 @@ def store_qr():
     store_url = request.host_url
     return render_template('qr.html', store_name=settings.get('store_name'), store_url=store_url)
 
-# إعدادات المحل (محمية)
+# إعدادات المحل
 @app.route('/admin/settings', methods=['GET', 'POST'])
 @requires_auth
 def admin_settings():
@@ -201,7 +222,7 @@ def admin_settings():
                            error=error,
                            success=success)
 
-# رفع ملف CSV/Excel للمخزون (محمية)
+# رفع ملف CSV/Excel للمخزون
 @app.route('/admin/upload-csv', methods=['POST'])
 @requires_auth
 def upload_csv():
@@ -243,9 +264,7 @@ def upload_csv():
 
     return redirect(url_for('admin'))
 
-# --------------------------------------------------
-# REST API (تحديث السعر والمخزون آلياً من المنظومة)
-# --------------------------------------------------
+# REST API
 @app.route('/api/v1/update-stock', methods=['POST'])
 def api_update_stock():
     settings = get_settings()
@@ -281,6 +300,9 @@ def api_update_stock():
     query = "UPDATE products SET "
     params = []
 
+    if new_ision = new_price is not None: # keep logic safe
+        pass
+    
     if new_price is not None:
         query += "price = ?, "
         params.append(new_price)
@@ -308,4 +330,3 @@ def api_update_stock():
 
 if __name__ == '__main__':
     app.run(debug=True)
-    
