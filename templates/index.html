@@ -4,31 +4,55 @@
 <!-- Hero Banner -->
 <div class="p-5 mb-4 bg-light rounded-3 text-center shadow-sm">
     <h1 class="display-5 fw-bold text-primary">{{ store_name }}</h1>
-    <p class="fs-4 text-muted">تصفح أحدث الأجهزة والعروض الحصرية</p>
+    <p class="fs-4 text-muted">تصفح أحدث الأجهزة، الهواتف، والعروض الحصرية</p>
+    
+    <!-- شريط بحث بسيط وسريع للزوار -->
+    <div class="row justify-content-center mt-4">
+        <div class="col-md-6">
+            <input type="text" id="searchBox" class="form-control form-control-lg text-center" placeholder="ابحث عن اسم الهاتف، الماركة، أو التصنيف...">
+        </div>
+    </div>
 </div>
 
 <!-- قائمة المنتجات -->
-<div class="row row-cols-1 row-cols-md-3 g-4">
+<div class="row row-cols-1 row-cols-md-3 g-4" id="productsList">
     {% for p in products %}
-    <div class="col">
+    <div class="col product-item" data-name="{{ p.name | lower }}" data-category="{{ p.category | lower }}">
         <div class="card h-100 shadow-sm position-relative">
             
-            <!-- شارة حالة الجهاز (جديد/مستعمل) -->
-            <span class="position-absolute top-0 end-0 m-2 badge {% if p.condition == 'جديد' %}bg-success{% elif p.condition == 'مستعمل' %}bg-warning text-dark{% else %}bg-info text-dark{% endif %}">
+            <!-- شارة حالة الجهاز (جديد/مستعمل/مجدد) -->
+            <span class="position-absolute top-0 end-0 m-2 badge 
+                {% if p.condition == 'جديد' %}bg-success
+                {% elif p.condition == 'مستعمل' %}bg-warning text-dark
+                {% else %}bg-info text-dark{% endif %} p-2">
                 {{ p.condition }}
             </span>
 
             <img src="{{ p.image }}" class="card-img-top p-3" style="height: 220px; object-fit: contain;">
+            
             <div class="card-body d-flex flex-column">
-                <span class="text-muted small mb-1">{{ p.category }}</span>
-                <h5 class="card-title">{{ p.name }}</h5>
-                <h4 class="card-text text-primary fw-bold my-2">{{ p.price }} د.ل</h4>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="badge bg-secondary">{{ p.category }}</span>
+                    <span class="text-muted small">متوفر بالمتجر</span>
+                </div>
                 
-                <a href="https://wa.me/{{ whatsapp }}?text=السلام%20عليكم،%20أريد%20استفسار/طلب%20جهاز:%20{{ p.name }}%20بسعر%20{{ p.price }}%20دينار" 
-                   target="_blank" 
-                   class="btn btn-success w-100 mt-auto">
-                   💬 اطلب عبر الواتساب
-                </a>
+                <h5 class="card-title fw-bold text-dark">{{ p.name }}</h5>
+                
+                <!-- تفاصيل إضافية عن الهاتف (مثل المواصفات المختصرة إذا رغبتِ) -->
+                <p class="card-text text-muted small mb-2">جهاز أصلي، فحص شامل، ضمان الجودة.</p>
+
+                <div class="mt-auto">
+                    <h4 class="card-text text-primary fw-bold my-2">{{ p.price }} د.ل</h4>
+                    
+                    <div class="d-grid gap-2">
+                        <a href="https://wa.me/{{ whatsapp }}?text=السلام%20عليكم،%20أريد%20الاستفسار%20عن%20هاتف:%20{{ p.name }}%20بسعر%20{{ p.price }}%20دينار%20وحالته:%20{{ p.condition }}" 
+                           target="_blank" 
+                           class="btn btn-success">
+                           💬 اطلب أو استفسر عبر الواتساب
+                        </a>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -38,5 +62,23 @@
     </div>
     {% endfor %}
 </div>
+
+<!-- جافاسكريبت لتفعيل البحث الفوري -->
+<script>
+    document.getElementById('searchBox').addEventListener('keyup', function() {
+        let query = this.value.toLowerCase();
+        let cards = document.querySelectorAll('.product-item');
+        
+        cards.forEach(card => {
+            let name = card.getAttribute('data-name');
+            let category = card.getAttribute('data-category');
+            if (name.includes(query) || category.includes(query)) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    });
+</script>
 
 {% endblock %}
