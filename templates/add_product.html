@@ -3,8 +3,19 @@
 <div class="col-md-6 offset-md-3">
     <h3 class="mb-4">إضافة منتج جديد</h3>
     <form method="post" class="card p-4 shadow-sm">
-        <label class="form-label">اسم المنتج</label>
-        <input type="text" name="name" class="form-control mb-3" required>
+        <label class="form-label">اسم الهاتف / المنتج</label>
+        <input type="text" name="name" class="form-control mb-3" placeholder="مثال: iPhone 13 Pro" required>
+
+        <div class="row">
+            <div class="col-md-6">
+                <label class="form-label">سعة الذاكرة (Storage)</label>
+                <input type="text" name="storage" class="form-control mb-3" placeholder="مثال: 128GB">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">الرام (RAM)</label>
+                <input type="text" name="ram" class="form-control mb-3" placeholder="مثال: 8GB">
+            </div>
+        </div>
 
         <label class="form-label">السعر (د.ل)</label>
         <input type="number" step="0.01" name="price" class="form-control mb-3" required>
@@ -17,7 +28,7 @@
         </select>
 
         <label class="form-label">التصنيف</label>
-        <input type="text" name="category" class="form-control mb-3" placeholder="مثال: هواتف، إكسسوارات" required>
+        <input type="text" name="category" class="form-control mb-3" placeholder="مثال: آبل، سامسونج، شاومي" required>
 
         <label class="form-label">رابط الصورة</label>
         <input type="url" name="image" class="form-control mb-3" required>
