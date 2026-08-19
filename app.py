@@ -16,7 +16,7 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
-    # جدول المنتجات (مع إضافة عمود حالة الجهاز condition)
+    # جدول المنتجات (مع إضافة أعمدة الذاكرة والرام والحالة)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +25,9 @@ def init_db():
             category TEXT,
             image TEXT,
             available INTEGER DEFAULT 1,
-            condition TEXT DEFAULT 'جديد'
+            condition TEXT DEFAULT 'جديد',
+            storage TEXT,
+            ram TEXT
         )
     ''')
     # جدول الإعدادات
@@ -36,15 +38,19 @@ def init_db():
         )
     ''')
     # إضافة القيم الافتراضية للإعدادات إن لم تكن موجودة
-    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('store_name', 'ليبيا تك - ليبيا')" )
+    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('store_name', 'ليبيا تك - ليبيا')")
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('store_whatsapp', '218910000000')")
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('api_secret_key', 'libya-tech-api-secret-key-2026')")
     
-    # التأكد من وجود عمود condition في جدول المنتجات للأحوال القديمة
+    # التأكد من وجود الأعمدة للقواعد القديمة
     cursor.execute("PRAGMA table_info(products)")
     columns = [col[1] for col in cursor.fetchall()]
     if 'condition' not in columns:
         cursor.execute("ALTER TABLE products ADD COLUMN condition TEXT DEFAULT 'جديد'")
+    if 'storage' not in columns:
+        cursor.execute("ALTER TABLE products ADD COLUMN storage TEXT")
+    if 'ram' not in columns:
+        cursor.execute("ALTER TABLE products ADD COLUMN ram TEXT")
 
     conn.commit()
     conn.close()
@@ -72,7 +78,6 @@ def admin():
     conn = get_db_connection()
     products = conn.execute("SELECT * FROM products").fetchall()
     
-    # حساب الإحصائيات للـ Dashboard Stats
     total_products = len(products)
     available_products = sum(1 for p in products if p['available'] == 1)
     unavailable_products = total_products - available_products
@@ -93,10 +98,12 @@ def add_product():
         category = request.form['category']
         image = request.form['image']
         condition = request.form.get('condition', 'جديد')
+        storage = request.form.get('storage', '')
+        ram = request.form.get('ram', '')
 
         conn = get_db_connection()
-        conn.execute("INSERT INTO products (name, price, category, image, condition) VALUES (?, ?, ?, ?, ?)",
-                     (name, price, category, image, condition))
+        conn.execute("INSERT INTO products (name, price, category, image, condition, storage, ram) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                     (name, price, category, image, condition, storage, ram))
         conn.commit()
         conn.close()
         return redirect(url_for('admin'))
@@ -115,9 +122,11 @@ def edit_product(id):
         image = request.form['image']
         available = 1 if 'available' in request.form else 0
         condition = request.form.get('condition', 'جديد')
+        storage = request.form.get('storage', '')
+        ram = request.form.get('ram', '')
 
-        conn.execute("UPDATE products SET name=?, price=?, category=?, image=?, available=?, condition=? WHERE id=?",
-                     (name, price, category, image, available, condition, id))
+        conn.execute("UPDATE products SET name=?, price=?, category=?, image=?, available=?, condition=?, storage=?, ram=? WHERE id=?",
+                     (name, price, category, image, available, condition, storage, ram, id))
         conn.commit()
         conn.close()
         return redirect(url_for('admin'))
@@ -193,15 +202,17 @@ def upload_csv():
                 category = str(row.get('category', 'عام')).strip()
                 image = str(row.get('image', '')).strip()
                 condition = str(row.get('condition', 'جديد')).strip()
+                storage = str(row.get('storage', '')).strip()
+                ram = str(row.get('ram', '')).strip()
 
                 if name:
                     existing = conn.execute("SELECT id FROM products WHERE name = ?", (name,)).fetchone()
                     if existing:
-                        conn.execute("UPDATE products SET price = ?, category = ?, condition = ? WHERE id = ?",
-                                     (price, category, condition, existing['id']))
+                        conn.execute("UPDATE products SET price = ?, category = ?, condition = ?, storage = ?, ram = ? WHERE id = ?",
+                                     (price, category, condition, storage, ram, existing['id']))
                     else:
-                        conn.execute("INSERT INTO products (name, price, category, image, condition) VALUES (?, ?, ?, ?, ?)",
-                                     (name, price, category, image, condition))
+                        conn.execute("INSERT INTO products (name, price, category, image, condition, storage, ram) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                     (name, price, category, image, condition, storage, ram))
             conn.commit()
             conn.close()
         except Exception as e:
@@ -230,6 +241,8 @@ def api_update_stock():
     new_price = data.get('price')
     available = data.get('available')
     condition = data.get('condition')
+    storage = data.get('storage')
+    ram = data.get('ram')
 
     conn = get_db_connection()
     product = None
@@ -254,6 +267,12 @@ def api_update_stock():
     if condition is not None:
         query += "condition = ?, "
         params.append(condition)
+    if storage is not None:
+        query += "storage = ?, "
+        params.append(storage)
+    if ram is not None:
+        query += "ram = ?, "
+        params.append(ram)
 
     query = query.rstrip(', ') + " WHERE id = ?"
     params.append(product['id'])
