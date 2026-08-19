@@ -14,9 +14,14 @@ UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# --- إعدادات الحماية لوحة التحكم ---
+# --- إعدادات الحماية لوحة التحكم (تقرأ من قاعدة البيانات) ---
 def check_auth(username, password):
-    return username == 'admin' and password == '123456' 
+    conn = get_db_connection()
+    settings = dict(conn.execute("SELECT key, value FROM settings").fetchall())
+    conn.close()
+    saved_user = settings.get('admin_username', 'admin')
+    saved_pass = settings.get('admin_password', '123456')
+    return username == saved_user and password == saved_pass
 
 def authenticate():
     return Response('يرجى إدخال اسم المستخدم وكلمة المرور للدخول إلى لوحة التحكم', 401, {'WWW-Authenticate': 'Basic realm="Login Required"'})
@@ -63,6 +68,8 @@ def init_db():
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('store_name', 'ليبيا تك - ليبيا')")
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('store_whatsapp', '218910000000')")
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('api_secret_key', 'libya-tech-api-secret-key-2026')")
+    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_username', 'admin')")
+    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_password', '123456')")
     
     cursor.execute("PRAGMA table_info(products)")
     columns = [col[1] for col in cursor.fetchall()]
@@ -212,7 +219,7 @@ def store_qr():
     store_url = request.host_url
     return render_template('qr.html', store_name=settings.get('store_name'), store_url=store_url)
 
-# إعدادات المحل
+# إعدادات المحل (مع تحديث اسم المستخدم وكلمة المرور)
 @app.route('/admin/settings', methods=['GET', 'POST'])
 @requires_auth
 def admin_settings():
@@ -224,11 +231,16 @@ def admin_settings():
         store_name = request.form.get('store_name')
         store_whatsapp = request.form.get('store_whatsapp')
         api_secret_key = request.form.get('api_secret_key')
+        admin_username = request.form.get('admin_username')
+        admin_password = request.form.get('admin_password')
 
         conn = get_db_connection()
         conn.execute("UPDATE settings SET value = ? WHERE key = 'store_name'", (store_name,))
         conn.execute("UPDATE settings SET value = ? WHERE key = 'store_whatsapp'", (store_whatsapp,))
         conn.execute("UPDATE settings SET value = ? WHERE key = 'api_secret_key'", (api_secret_key,))
+        conn.execute("UPDATE settings SET value = ? WHERE key = 'admin_username'", (admin_username,))
+        if admin_password:
+            conn.execute("UPDATE settings SET value = ? WHERE key = 'admin_password'", (admin_password,))
         conn.commit()
         conn.close()
 
@@ -239,10 +251,11 @@ def admin_settings():
                            store_name=settings.get('store_name'),
                            current_whatsapp=settings.get('store_whatsapp'),
                            api_secret_key=settings.get('api_secret_key'),
+                           admin_username=settings.get('admin_username', 'admin'),
                            error=error,
                            success=success)
 
-# رفع ملف CSV للمخزون (باستخدام مكتبة بايثون الأساسية بدون مشاكل)
+# رفع ملف CSV للمخزون
 @app.route('/admin/upload-csv', methods=['POST'])
 @requires_auth
 def upload_csv():
@@ -284,7 +297,6 @@ def upload_csv():
 
 # REST API
 @app.route('/api/v1/update-stock', methods=['POST'])
-@requires_auth
 def api_update_stock():
     settings = get_settings()
     expected_key = settings.get('api_secret_key')
