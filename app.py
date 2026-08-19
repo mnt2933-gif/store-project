@@ -42,10 +42,14 @@ def get_db_connection():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
-
+    
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # حذف الجدول القديم لضمان توافق الأعمدة بنسبة 100%
+    cursor.execute('DROP TABLE IF EXISTS products')
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,21 +75,8 @@ def init_db():
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_username', 'admin')")
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_password', '123456')")
     
-    cursor.execute("PRAGMA table_info(products)")
-    columns = [col[1] for col in cursor.fetchall()]
-    
-    if 'image' not in columns:
-        cursor.execute("ALTER TABLE products ADD COLUMN image TEXT")
-    if 'condition' not in columns:
-        cursor.execute("ALTER TABLE products ADD COLUMN condition TEXT DEFAULT 'جديد'")
-    if 'storage' not in columns:
-        cursor.execute("ALTER TABLE products ADD COLUMN storage TEXT")
-    if 'ram' not in columns:
-        cursor.execute("ALTER TABLE products ADD COLUMN ram TEXT")
-
     conn.commit()
     conn.close()
-
 init_db()
 
 def get_settings():
