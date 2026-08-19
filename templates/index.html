@@ -1,53 +1,41 @@
 {% extends "layout.html" %}
 {% block content %}
 
-<form class="row g-2 mb-4" method="get">
-    <div class="col-md-4">
-        <input type="text" name="q" class="form-control" placeholder="ابحث عن جهاز..." value="{{ selected_q }}">
-    </div>
-    <div class="col-md-3">
-        <select name="brand" class="form-select">
-            <option value="">كل الماركات</option>
-            {% for b in brands %}
-                <option value="{{ b['brand'] }}" {% if b['brand'] == selected_brand %}selected{% endif %}>{{ b['brand'] }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="col-md-3">
-        <select name="category" class="form-select">
-            <option value="">الكل</option>
-            <option value="phone" {% if selected_category == 'phone' %}selected{% endif %}>هواتف</option>
-            <option value="laptop" {% if selected_category == 'laptop' %}selected{% endif %}>لابتوبات</option>
-        </select>
-    </div>
-    <div class="col-md-2">
-        <button class="btn btn-primary w-100" type="submit">فلترة</button>
-    </div>
-</form>
+<!-- Hero Banner -->
+<div class="p-5 mb-4 bg-light rounded-3 text-center shadow-sm">
+    <h1 class="display-5 fw-bold text-primary">{{ store_name }}</h1>
+    <p class="fs-4 text-muted">تصفح أحدث الأجهزة والعروض الحصرية</p>
+</div>
 
-<div class="row">
+<!-- قائمة المنتجات -->
+<div class="row row-cols-1 row-cols-md-3 g-4">
     {% for p in products %}
-    <div class="col-md-4 mb-4">
-        <div class="card h-100 {% if not p['available'] %}opacity-50{% endif %}">
-            {% if p['image_url'] %}
-                <img src="{{ p['image_url'] }}" class="card-img-top" alt="{{ p['name'] }}" style="height: 200px; object-fit: contain; padding: 10px;">
-            {% endif %}
-            <div class="card-body">
-                <h5 class="card-title">{{ p['name'] }}</h5>
-                <h6 class="card-subtitle mb-2 text-muted">{{ p['brand'] }}</h6>
-                <p class="card-text">{{ p['specs'] }}</p>
-                <p class="fw-bold">{{ p['price'] }} د.ل</p>
-                {% if p['available'] %}
-                    <span class="badge bg-success mb-2">متوفر</span>
-                {% else %}
-                    <span class="badge bg-secondary mb-2">غير متوفر</span>
-                {% endif %}
-                <a href="{{ url_for('product_detail', product_id=p['id']) }}" class="btn btn-outline-primary w-100">التفاصيل</a>
+    <div class="col">
+        <div class="card h-100 shadow-sm position-relative">
+            
+            <!-- شارة حالة الجهاز (جديد/مستعمل) -->
+            <span class="position-absolute top-0 end-0 m-2 badge {% if p.condition == 'جديد' %}bg-success{% elif p.condition == 'مستعمل' %}bg-warning text-dark{% else %}bg-info text-dark{% endif %}">
+                {{ p.condition }}
+            </span>
+
+            <img src="{{ p.image }}" class="card-img-top p-3" style="height: 220px; object-fit: contain;">
+            <div class="card-body d-flex flex-column">
+                <span class="text-muted small mb-1">{{ p.category }}</span>
+                <h5 class="card-title">{{ p.name }}</h5>
+                <h4 class="card-text text-primary fw-bold my-2">{{ p.price }} د.ل</h4>
+                
+                <a href="https://wa.me/{{ whatsapp }}?text=السلام%20عليكم،%20أريد%20استفسار/طلب%20جهاز:%20{{ p.name }}%20بسعر%20{{ p.price }}%20دينار" 
+                   target="_blank" 
+                   class="btn btn-success w-100 mt-auto">
+                   💬 اطلب عبر الواتساب
+                </a>
             </div>
         </div>
     </div>
     {% else %}
-    <p class="text-center text-muted">ما فيه نتائج مطابقة.</p>
+    <div class="col-12 text-center py-5">
+        <h4>لا توجد منتجات معروضة حالياً.</h4>
+    </div>
     {% endfor %}
 </div>
 
