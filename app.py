@@ -1,7 +1,8 @@
 import os
 import sqlite3
 import uuid
-import pandas as pd
+import csv
+import io
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from werkzeug.utils import secure_filename
 from functools import wraps
@@ -63,7 +64,6 @@ def init_db():
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('store_whatsapp', '218910000000')")
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('api_secret_key', 'libya-tech-api-secret-key-2026')")
     
-    # التأكد من وجود جميع الأعمدة وإضافتها إن لم تكن موجودة
     cursor.execute("PRAGMA table_info(products)")
     columns = [col[1] for col in cursor.fetchall()]
     
@@ -147,7 +147,7 @@ def add_product():
 
     return render_template('add_product.html')
 
-# تعديل منتج (محمية وآمنة 100 ضد نقص الأعمدة)
+# تعديل منتج
 @app.route('/admin/edit/<int:id>', methods=['GET', 'POST'])
 @requires_auth
 def edit_product(id):
@@ -158,7 +158,6 @@ def edit_product(id):
         conn.close()
         return "المنتج غير موجود", 404
 
-    # تحويل الصف إلى قاموس بشكل آمن تماماً
     product = dict(product_row)
 
     if request.method == 'POST':
@@ -243,7 +242,7 @@ def admin_settings():
                            error=error,
                            success=success)
 
-# رفع ملف CSV/Excel للمخزون
+# رفع ملف CSV للمخزون (باستخدام مكتبة بايثون الأساسية بدون مشاكل)
 @app.route('/admin/upload-csv', methods=['POST'])
 @requires_auth
 def upload_csv():
@@ -255,15 +254,13 @@ def upload_csv():
 
     if file:
         try:
-            if file.filename.endswith('.csv'):
-                df = pd.read_csv(file)
-            else:
-                df = pd.read_excel(file)
+            stream = io.TextIOWrapper(file.stream, encoding='utf-8')
+            reader = csv.DictReader(stream)
 
             conn = get_db_connection()
-            for _, row in df.iterrows():
+            for row in reader:
                 name = str(row.get('name', '')).strip()
-                price = float(row.get('price', 0))
+                price = float(row.get('price', 0) or 0)
                 category = str(row.get('category', 'عام')).strip()
                 image = str(row.get('image', '')).strip()
                 condition = str(row.get('condition', 'جديد')).strip()
