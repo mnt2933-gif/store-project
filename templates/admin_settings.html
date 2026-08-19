@@ -2,10 +2,10 @@
 {% block content %}
 
 <div class="row">
-    <!-- الجزء الأول: إعدادات المحل الأساسية -->
+    <!-- الجزء الأول: إعدادات المحل الأساسية وتغيير بيانات الدخول -->
     <div class="col-md-6 mb-4">
         <div class="card p-4 shadow-sm h-100">
-            <h5 class="card-title mb-3">⚙️ إعدادات المحل الأساسية</h5>
+            <h5 class="card-title mb-3">⚙️ إعدادات المحل الأساسية وحماية اللوحة</h5>
             <hr>
 
             {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
@@ -23,6 +23,15 @@
                     <input type="password" id="apiKeyInput" name="api_secret_key" class="form-control" value="{{ api_secret_key }}" required>
                     <button class="btn btn-outline-secondary" type="button" onclick="togglePassword()">👁️ إظهار/إخفاء</button>
                 </div>
+
+                <hr class="my-3">
+
+                <!-- خانات اسم المستخدم وكلمة المرور الجديدة -->
+                <label class="form-label fw-bold text-primary">اسم مستخدم لوحة التحكم</label>
+                <input type="text" name="admin_username" class="form-control mb-3" value="{{ admin_username }}" required>
+
+                <label class="form-label fw-bold text-primary">كلمة المرور الجديدة</label>
+                <input type="password" name="admin_password" class="form-control mb-3" placeholder="اتركها فارغة إذا لم ترد تغييرها">
 
                 <button class="btn btn-primary w-100 mt-2">حفظ الإعدادات</button>
             </form>
@@ -62,7 +71,7 @@
 <div class="row mb-4">
     <div class="col-md-12">
         <div class="card p-4 shadow-sm">
-            <h5 class="card-title">📁  (من المنظومه )استيراد يدوي للمخزون (ملف Excel/CSV)</h5>
+            <h5 class="card-title">📁 استيراد يدوي للمخزون (من المنظومة - ملف Excel/CSV)</h5>
             <form action="/admin/upload-csv" method="POST" enctype="multipart/form-data">
                 <div class="input-group">
                     <input type="file" class="form-control" name="file" accept=".csv, .xlsx" required>
@@ -75,7 +84,7 @@
 
 <a href="{{ url_for('admin') }}" class="btn btn-link w-100 text-center mb-4">رجوع للوحة التحكم</a>
 
-<!-- وظائف البرمجة للواجهة (إظهار/إخفاء السير ونسخ الرابط) -->
+<!-- وظائف البرمجة للواجهة (إظهار/إخفاء السر ونسخ الرابط) -->
 <script>
 function togglePassword() {
     var x = document.getElementById("apiKeyInput");
