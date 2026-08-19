@@ -4,23 +4,35 @@
 <!-- Hero Banner -->
 <div class="p-5 mb-4 bg-light rounded-3 text-center shadow-sm">
     <h1 class="display-5 fw-bold text-primary">{{ store_name }}</h1>
-    <p class="fs-4 text-muted">تصفح أحدث الأجهزة، الهواتف، والعروض الحصرية</p>
+    <p class="fs-4 text-muted">اكتشف أحدث الهواتف الذكية وقارن بينها بكل إسهاب</p>
     
-    <!-- شريط بحث بسيط وسريع للزوار -->
+    <!-- شريط بحث متكامل -->
     <div class="row justify-content-center mt-4">
-        <div class="col-md-6">
-            <input type="text" id="searchBox" class="form-control form-control-lg text-center" placeholder="ابحث عن اسم الهاتف، الماركة، أو التصنيف...">
+        <div class="col-md-8">
+            <input type="text" id="searchBox" class="form-control form-control-lg text-center" placeholder="ابحث باسم الهاتف، الماركة، أو السعة (مثال: 128GB، آبل)...">
         </div>
     </div>
+</div>
+
+<!-- شريط سري للمقارنة -->
+<div id="compareBar" class="alert alert-info d-none justify-content-between align-items-center mb-4">
+    <span>تم اختيار <span id="compareCount">0</span> هواتف للمقارنة.</span>
+    <button class="btn btn-primary btn-sm" onclick="showComparison()">عرض جدول المقارنة</button>
 </div>
 
 <!-- قائمة المنتجات -->
 <div class="row row-cols-1 row-cols-md-3 g-4" id="productsList">
     {% for p in products %}
-    <div class="col product-item" data-name="{{ p.name | lower }}" data-category="{{ p.category | lower }}">
+    <div class="col product-item" 
+         data-name="{{ p.name | lower }}" 
+         data-category="{{ p.category | lower }}"
+         data-storage="{{ p.storage | lower }}"
+         data-price="{{ p.price }}"
+         data-condition="{{ p.condition }}">
+        
         <div class="card h-100 shadow-sm position-relative">
             
-            <!-- شارة حالة الجهاز (جديد/مستعمل/مجدد) -->
+            <!-- شارة حالة الجهاز -->
             <span class="position-absolute top-0 end-0 m-2 badge 
                 {% if p.condition == 'جديد' %}bg-success
                 {% elif p.condition == 'مستعمل' %}bg-warning text-dark
@@ -33,23 +45,25 @@
             <div class="card-body d-flex flex-column">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="badge bg-secondary">{{ p.category }}</span>
-                    <span class="text-muted small">متوفر بالمتجر</span>
+                    {% if p.storage or p.ram %}
+                    <span class="badge bg-dark">💾 {{ p.storage }} | 🧠 {{ p.ram }}</span>
+                    {% endif %}
                 </div>
                 
                 <h5 class="card-title fw-bold text-dark">{{ p.name }}</h5>
                 
-                <!-- تفاصيل إضافية عن الهاتف (مثل المواصفات المختصرة إذا رغبتِ) -->
-                <p class="card-text text-muted small mb-2">جهاز أصلي، فحص شامل، ضمان الجودة.</p>
-
                 <div class="mt-auto">
                     <h4 class="card-text text-primary fw-bold my-2">{{ p.price }} د.ل</h4>
                     
                     <div class="d-grid gap-2">
-                        <a href="https://wa.me/{{ whatsapp }}?text=السلام%20عليكم،%20أريد%20الاستفسار%20عن%20هاتف:%20{{ p.name }}%20بسعر%20{{ p.price }}%20دينار%20وحالته:%20{{ p.condition }}" 
+                        <a href="https://wa.me/{{ whatsapp }}?text=السلام%20عليكم،%20أريد%20الاستفسار%20عن%20هاتف:%20{{ p.name }}%20سعة%20{{ p.storage }}%20بسعر%20{{ p.price }}%20د.ل" 
                            target="_blank" 
-                           class="btn btn-success">
-                           💬 اطلب أو استفسر عبر الواتساب
+                           class="btn btn-success btn-sm">
+                           💬 اطلب عبر الواتساب
                         </a>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="toggleCompare('{{ p.name }}', '{{ p.price }}', '{{ p.storage }}', '{{ p.ram }}', '{{ p.condition }}', this)">
+                           ⚖️ إضافة للمقارنة
+                        </button>
                     </div>
                 </div>
 
@@ -63,8 +77,32 @@
     {% endfor %}
 </div>
 
-<!-- جافاسكريبت لتفعيل البحث الفوري -->
+<!-- نافذة عرض المقارنة -->
+<div class="modal fade" id="compareModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">جدول مقارنة الهواتف</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered text-center" id="compareTable">
+            <thead>
+                <tr>
+                    <th>المواصفات</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- سكربت البحث والمقارنة -->
 <script>
+    // البحث الفوري الشامل
     document.getElementById('searchBox').addEventListener('keyup', function() {
         let query = this.value.toLowerCase();
         let cards = document.querySelectorAll('.product-item');
@@ -72,13 +110,69 @@
         cards.forEach(card => {
             let name = card.getAttribute('data-name');
             let category = card.getAttribute('data-category');
-            if (name.includes(query) || category.includes(query)) {
+            let storage = card.getAttribute('data-storage');
+            if (name.includes(query) || category.includes(query) || storage.includes(query)) {
                 card.style.display = '';
             } else {
                 card.style.display = 'none';
             }
         });
     });
+
+    // نظام المقارنة المبسط
+    let compareList = [];
+
+    function toggleCompare(name, price, storage, ram, condition, btn) {
+        let item = { name, price, storage, ram, condition };
+        let index = compareList.findIndex(i => i.name === name);
+
+        if (index > -1) {
+            compareList.splice(index, 1);
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-outline-secondary');
+            btn.innerText = '⚖️ إضافة للمقارنة';
+        } else {
+            if (compareList.length >= 3) {
+                alert('يمكنك مقارنة 3 هواتف كحد أقصى في نفس الوقت.');
+                return;
+            }
+            compareList.push(item);
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-secondary');
+            btn.innerText = '❌ إزالة من المقارنة';
+        }
+
+        let bar = document.getElementById('compareBar');
+        let count = document.getElementById('compareCount');
+        count.innerText = compareList.length;
+        if (compareList.length > 0) {
+            bar.classList.remove('d-none');
+            bar.classList.add('d-flex');
+        } else {
+            bar.classList.remove('d-flex');
+            bar.classList.add('d-none');
+        }
+    }
+
+    function showComparison() {
+        let tableHead = document.querySelector('#compareTable thead tr');
+        let tableBody = document.querySelector('#compareTable tbody');
+        
+        let headHtml = '<th>المواصفات</th>';
+        compareList.forEach(item => { headHtml += `<th>${item.name}</th>`; });
+        tableHead.innerHTML = headHtml;
+
+        let bodyHtml = `
+            <tr><td><b>السعر</b></td>${compareList.map(i => `<td>${i.price} د.ل</td>`).join('')}</tr>
+            <tr><td><b>الذاكرة</b></td>${compareList.map(i => `<td>${i.storage || '-'}</td>`).join('')}</tr>
+            <tr><td><b>الرام</b></td>${compareList.map(i => `<td>${i.ram || '-'}</td>`).join('')}</tr>
+            <tr><td><b>الحالة</b></td>${compareList.map(i => `<td>${i.condition}</td>`).join('')}</tr>
+        `;
+        tableBody.innerHTML = bodyHtml;
+
+        var myModal = new bootstrap.Modal(document.getElementById('compareModal'));
+        myModal.show();
+    }
 </script>
 
-{% endblock %}
+{% endpages %}
