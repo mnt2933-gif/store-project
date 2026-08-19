@@ -110,17 +110,17 @@ def admin():
                            available_products=available_products,
                            unavailable_products=unavailable_products)
 
-# إضافة منتج جديد (يدعم رفع الصور من المعرض)
+# إضافة منتج جديد (معالجة آمنة للصور والبيانات)
 @app.route('/admin/add', methods=['GET', 'POST'])
 @requires_auth
 def add_product():
     if request.method == 'POST':
-        name = request.form['name']
-        price = request.form['price']
-        category = request.form['category']
+        name = request.form.get('name', '').strip()
+        price = request.form.get('price', 0)
+        category = request.form.get('category', '').strip()
         condition = request.form.get('condition', 'جديد')
-        storage = request.form.get('storage', '')
-        ram = request.form.get('ram', '')
+        storage = request.form.get('storage', '').strip()
+        ram = request.form.get('ram', '').strip()
 
         image_path = ''
         if 'image' in request.files:
@@ -139,23 +139,27 @@ def add_product():
         return redirect(url_for('admin'))
     return render_template('add_product.html')
 
-# تعديل منتج
+# تعديل منتج (معالجة آمنة تمنع الانهيار)
 @app.route('/admin/edit/<int:id>', methods=['GET', 'POST'])
 @requires_auth
 def edit_product(id):
     conn = get_db_connection()
     product = conn.execute("SELECT * FROM products WHERE id = ?", (id,)).fetchone()
+    
+    if not product:
+        conn.close()
+        return redirect(url_for('admin'))
 
     if request.method == 'POST':
-        name = request.form['name']
-        price = request.form['price']
-        category = request.form['category']
+        name = request.form.get('name', '').strip()
+        price = request.form.get('price', 0)
+        category = request.form.get('category', '').strip()
         available = 1 if 'available' in request.form else 0
         condition = request.form.get('condition', 'جديد')
-        storage = request.form.get('storage', '')
-        ram = request.form.get('ram', '')
+        storage = request.form.get('storage', '').strip()
+        ram = request.form.get('ram', '').strip()
 
-        image_path = product['image']
+        image_path = product['image'] if product['image'] else ''
         if 'image' in request.files:
             file = request.files['image']
             if file and file.filename != '':
