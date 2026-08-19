@@ -63,11 +63,11 @@
                     <h4 class="card-text text-primary fw-bold my-2">{{ p.price }} د.ل</h4>
                     
                     <div class="d-grid gap-2">
-                        <a href="https://wa.me/{{ whatsapp }}?text=السلام%20عليكم،%20أريد%20الاستفسار%20عن%20هاتف:%20{{ p.name }}%20سعة%20{{ p.storage }}%20بسعر%20{{ p.price }}%20د.ل" 
-                           target="_blank" 
-                           class="btn btn-success btn-sm">
-                           💬 اطلب عبر الواتساب
-                        </a>
+                     <a href="https://wa.me/{{ whatsapp }}?text=السلام%20عليكم،%20أريد%20الاستفسار%20عن%20منتج:%20{{ p.name }}%20سعة%20{{ p.storage }}%20بسعر%20{{ p.price }}%20د.ل" 
+   target="_blank" 
+   class="btn btn-success btn-sm">
+   💬 اطلب عبر الواتساب
+</a>
                         <button class="btn btn-outline-secondary btn-sm" onclick="toggleCompare('{{ p.name }}', '{{ p.price }}', '{{ p.storage }}', '{{ p.ram }}', '{{ p.condition }}', this)">
                             ⚖️ إضافة للمقارنة
                         </button>
