@@ -29,7 +29,7 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-# إعداد قاعدة البيانات
+# إعداد قاعدة البيانات وتحديث الأعمدة تلقائياً
 DB_NAME = "store.db"
 
 def get_db_connection():
@@ -63,8 +63,12 @@ def init_db():
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('store_whatsapp', '218910000000')")
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('api_secret_key', 'libya-tech-api-secret-key-2026')")
     
+    # التأكد من وجود جميع الأعمدة وإضافتها إن لم تكن موجودة
     cursor.execute("PRAGMA table_info(products)")
     columns = [col[1] for col in cursor.fetchall()]
+    
+    if 'image' not in columns:
+        cursor.execute("ALTER TABLE products ADD COLUMN image TEXT")
     if 'condition' not in columns:
         cursor.execute("ALTER TABLE products ADD COLUMN condition TEXT DEFAULT 'جديد'")
     if 'storage' not in columns:
@@ -143,16 +147,19 @@ def add_product():
 
     return render_template('add_product.html')
 
-# تعديل منتج (النسخة السليمة والمحمية)
+# تعديل منتج (محمية وآمنة 100 ضد نقص الأعمدة)
 @app.route('/admin/edit/<int:id>', methods=['GET', 'POST'])
 @requires_auth
 def edit_product(id):
     conn = get_db_connection()
-    product = conn.execute("SELECT * FROM products WHERE id = ?", (id,)).fetchone()
+    product_row = conn.execute("SELECT * FROM products WHERE id = ?", (id,)).fetchone()
     
-    if not product:
+    if not product_row:
         conn.close()
         return "المنتج غير موجود", 404
+
+    # تحويل الصف إلى قاموس بشكل آمن تماماً
+    product = dict(product_row)
 
     if request.method == 'POST':
         try:
@@ -164,7 +171,7 @@ def edit_product(id):
             storage = request.form.get('storage', '').strip()
             ram = request.form.get('ram', '').strip()
 
-            image_path = product['image'] if product['image'] else ''
+            image_path = product.get('image', '')
             if 'image' in request.files:
                 file = request.files['image']
                 if file and file.filename != '':
@@ -280,6 +287,7 @@ def upload_csv():
 
 # REST API
 @app.route('/api/v1/update-stock', methods=['POST'])
+@requires_auth
 def api_update_stock():
     settings = get_settings()
     expected_key = settings.get('api_secret_key')
