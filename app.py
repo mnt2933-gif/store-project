@@ -122,7 +122,6 @@ def add_product():
         storage = request.form.get('storage', '')
         ram = request.form.get('ram', '')
 
-        # معالجة رفع الصورة من المعرض
         image_path = ''
         if 'image' in request.files:
             file = request.files['image']
@@ -140,7 +139,7 @@ def add_product():
         return redirect(url_for('admin'))
     return render_template('add_product.html')
 
-# تعديل منتج (يدعم تغيير الصورة من المعرض)
+# تعديل منتج
 @app.route('/admin/edit/<int:id>', methods=['GET', 'POST'])
 @requires_auth
 def edit_product(id):
@@ -156,7 +155,7 @@ def edit_product(id):
         storage = request.form.get('storage', '')
         ram = request.form.get('ram', '')
 
-        image_path = product['image'] # الاحتفاظ بالصورة القديمة إن لم يتم اختيار صورة جديدة
+        image_path = product['image']
         if 'image' in request.files:
             file = request.files['image']
             if file and file.filename != '':
@@ -299,7 +298,7 @@ def api_update_stock():
 
     query = "UPDATE products SET "
     params = []
-    
+
     if new_price is not None:
         query += "price = ?, "
         params.append(new_price)
