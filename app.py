@@ -15,8 +15,8 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # --- إعدادات الاتصال بـ Supabase ---
-SUPABASE_URL = "https://jghhfdpidostankjghvr.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnaGhmZHBpZG9zdGFua2pghvrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxOTIwNjMsImV4cCI6MjEwMjc2ODA2M30.7hR4OYwh6EHOaCOLubl8jtl6TbXb7EKw9Dr2OArtFW4"
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://jghhfdpidostankjghvr.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "نسخ_المفتاح_هنا_احتياطياً")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
