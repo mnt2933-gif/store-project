@@ -108,8 +108,17 @@ def add_product():
                 if file and file.filename != '':
                     filename = secure_filename(file.filename)
                     unique_filename = f"{uuid.uuid4()}_{filename}"
-                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
-                    image_path = f"uploads/{unique_filename}"
+                    
+                    # رفع الصورة إلى Supabase Storage مباشرة
+                    file_bytes = file.read()
+                    supabase.storage.from_('products-images').upload(
+                        path=unique_filename,
+                        file=file_bytes,
+                        file_options={"content-type": file.content_type}
+                    )
+                    
+                    # الحصول على الرابط العام المباشر للصورة
+                    image_path = supabase.storage.from_('products-images').get_public_url(unique_filename)
 
             supabase.table('products').insert({
                 "name": name,
