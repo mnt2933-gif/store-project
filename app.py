@@ -14,8 +14,10 @@ UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://jghhfdpidostankjghvr.supabase.co")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_publishable__4PZ29q-_wsEY9vS-adQKQ_oC_aQdnJ")
+# --- إعدادات الاتصال بـ Supabase ---
+SUPABASE_URL = "jghhfdpidostankjghvr"
+SUPABASE_KEY = "sb_publishable__4PZ29q-_wsEY9vS-adQKQ_oC_aQdnJ"
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- إعدادات الحماية لوحة التحكم ---
