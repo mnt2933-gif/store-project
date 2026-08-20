@@ -9,15 +9,11 @@ from supabase import create_client, Client
 
 app = Flask(__name__)
 
-# مجلد حفظ الصور المرفوعة محلياً
-UPLOAD_FOLDER = 'static/uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
 SUPABASE_URL = "https://jghhfdpidostankjghvr.supabase.co"
 SUPABASE_KEY = "sb_publishable__4PZ29q-_wsEY9vS-adQKQ_oC_aQdnJ"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 # --- إعدادات الحماية لوحة التحكم ---
 def check_auth(username, password):
     try:
@@ -89,7 +85,7 @@ def admin():
                            available_products=available_products,
                            unavailable_products=unavailable_products)
 
-# إضافة منتج جديد
+# إضافة منتج جديد (مع رفع الصور إلى Supabase Storage)
 @app.route('/admin/add', methods=['GET', 'POST'])
 @requires_auth
 def add_product():
@@ -109,15 +105,14 @@ def add_product():
                     filename = secure_filename(file.filename)
                     unique_filename = f"{uuid.uuid4()}_{filename}"
                     
-                    # رفع الصورة إلى Supabase Storage مباشرة
+                    # رفع الصورة إلى Supabase Storage
                     file_bytes = file.read()
                     supabase.storage.from_('products-images').upload(
                         path=unique_filename,
                         file=file_bytes,
                         file_options={"content-type": file.content_type}
                     )
-                    
-                    # الحصول على الرابط العام المباشر للصورة
+                    # جلب الرابط العام المباشر للصورة
                     image_path = supabase.storage.from_('products-images').get_public_url(unique_filename)
 
             supabase.table('products').insert({
@@ -165,8 +160,14 @@ def edit_product(id):
                 if file and file.filename != '':
                     filename = secure_filename(file.filename)
                     unique_filename = f"{uuid.uuid4()}_{filename}"
-                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
-                    image_path = f"uploads/{unique_filename}"
+                    
+                    file_bytes = file.read()
+                    supabase.storage.from_('products-images').upload(
+                        path=unique_filename,
+                        file=file_bytes,
+                        file_options={"content-type": file.content_type}
+                    )
+                    image_path = supabase.storage.from_('products-images').get_public_url(unique_filename)
 
             supabase.table('products').update({
                 "name": name,
@@ -291,7 +292,7 @@ def upload_csv():
     return redirect(url_for('admin'))
 
 # REST API
-@app.route('/api/v1/update-stock', methods=['POST'])
+@app.api_view if hasattr(app, 'api_view') else app.route('/api/v1/update-stock', methods=['POST'])
 def api_update_stock():
     settings = get_settings()
     expected_key = settings.get('api_secret_key')
