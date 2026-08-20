@@ -1,11 +1,11 @@
 import os
-import sqlite3
 import uuid
 import csv
 import io
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from werkzeug.utils import secure_filename
 from functools import wraps
+from supabase import create_client, Client
 
 app = Flask(__name__)
 
@@ -14,14 +14,24 @@ UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# --- إعدادات الحماية لوحة التحكم (تقرأ من قاعدة البيانات) ---
+# --- إعدادات الاتصال بـ Supabase ---
+SUPABASE_URL = "https://jghhfdpidostankjghvr.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnaGhmZHBpZG9zdGFua2pghvrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxOTIwNjMsImV4cCI6MjEwMjc2ODA2M30.7hR4OYwh6EHOaCOLubl8jtl6TbXb7EKw9Dr2OArtFW4"
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# --- إعدادات الحماية لوحة التحكم ---
 def check_auth(username, password):
-    conn = get_db_connection()
-    settings = dict(conn.execute("SELECT key, value FROM settings").fetchall())
-    conn.close()
-    saved_user = settings.get('admin_username', 'admin')
-    saved_pass = settings.get('admin_password', '123456')
-    return username == saved_user and password == saved_pass
+    try:
+        res = supabase.table('settings').select("value").eq('key', 'admin_username').execute()
+        saved_user = res.data[0]['value'] if res.data else 'admin'
+        
+        res_pass = supabase.table('settings').select("value").eq('key', 'admin_password').execute()
+        saved_pass = res_pass.data[0]['value'] if res_pass.data else '123456'
+        
+        return username == saved_user and password == saved_pass
+    except:
+        return username == 'admin' and password == '123456'
 
 def authenticate():
     return Response('يرجى إدخال اسم المستخدم وكلمة المرور للدخول إلى لوحة التحكم', 401, {'WWW-Authenticate': 'Basic realm="Login Required"'})
@@ -35,77 +45,46 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-# إعداد قاعدة البيانات وتحديث الأعمدة تلقائياً
-DB_NAME = "store.db"
-
-def get_db_connection():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
-    
-def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # حذف الجدول القديم لضمان توافق الأعمدة بنسبة 100%
-    cursor.execute('DROP TABLE IF EXISTS products')
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            price REAL NOT NULL,
-            category TEXT,
-            image TEXT,
-            available INTEGER DEFAULT 1,
-            condition TEXT DEFAULT 'جديد',
-            storage TEXT,
-            ram TEXT
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-    ''')
-    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('store_name', 'ليبيا تك - ليبيا')")
-    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('store_whatsapp', '218910000000')")
-    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('api_secret_key', 'libya-tech-api-secret-key-2026')")
-    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_username', 'admin')")
-    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_password', '123456')")
-    
-    conn.commit()
-    conn.close()
-init_db()
-
 def get_settings():
-    conn = get_db_connection()
-    settings = dict(conn.execute("SELECT key, value FROM settings").fetchall())
-    conn.close()
-    return settings
+    try:
+        res = supabase.table('settings').select("key, value").execute()
+        if res.data:
+            return {row['key']: row['value'] for row in res.data}
+    except:
+        pass
+    return {
+        'store_name': 'ليبيا تك - ليبيا',
+        'store_whatsapp': '218910000000',
+        'api_secret_key': 'libya-tech-api-secret-key-2026',
+        'admin_username': 'admin',
+        'admin_password': '123456'
+    }
 
 # الصفحة الرئيسية للمتجر
 @app.route('/')
 def index():
     settings = get_settings()
-    conn = get_db_connection()
-    products = conn.execute("SELECT * FROM products WHERE available = 1").fetchall()
-    conn.close()
+    try:
+        res = supabase.table('products').select("*").eq('available', 1).execute()
+        products = res.data if res.data else []
+    except:
+        products = []
     return render_template('index.html', products=products, store_name=settings.get('store_name'), whatsapp=settings.get('store_whatsapp'))
 
 # لوحة التحكم الرئيسية
 @app.route('/admin')
 @requires_auth
 def admin():
-    conn = get_db_connection()
-    products = conn.execute("SELECT * FROM products").fetchall()
+    try:
+        res = supabase.table('products').select("*").execute()
+        products = res.data if res.data else []
+    except:
+        products = []
     
     total_products = len(products)
-    available_products = sum(1 for p in products if p['available'] == 1)
+    available_products = sum(1 for p in products if p.get('available') == 1)
     unavailable_products = total_products - available_products
 
-    conn.close()
     return render_template('admin.html', 
                            products=products, 
                            total_products=total_products,
@@ -134,11 +113,17 @@ def add_product():
                     file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
                     image_path = f"uploads/{unique_filename}"
 
-            conn = get_db_connection()
-            conn.execute("INSERT INTO products (name, price, category, image, condition, storage, ram) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                         (name, price, category, image_path, condition, storage, ram))
-            conn.commit()
-            conn.close()
+            supabase.table('products').insert({
+                "name": name,
+                "price": price,
+                "category": category,
+                "image": image_path,
+                "available": 1,
+                "condition": condition,
+                "storage": storage,
+                "ram": ram
+            }).execute()
+
             return redirect(url_for('admin'))
         except Exception as e:
             return f"<h3>حدث خطأ أثناء الإضافة:</h3><p>{str(e)}</p>", 500
@@ -149,14 +134,13 @@ def add_product():
 @app.route('/admin/edit/<int:id>', methods=['GET', 'POST'])
 @requires_auth
 def edit_product(id):
-    conn = get_db_connection()
-    product_row = conn.execute("SELECT * FROM products WHERE id = ?", (id,)).fetchone()
-    
-    if not product_row:
-        conn.close()
+    try:
+        res = supabase.table('products').select("*").eq('id', id).execute()
+        if not res.data:
+            return "المنتج غير موجود", 404
+        product = res.data[0]
+    except:
         return "المنتج غير موجود", 404
-
-    product = dict(product_row)
 
     if request.method == 'POST':
         try:
@@ -177,29 +161,31 @@ def edit_product(id):
                     file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
                     image_path = f"uploads/{unique_filename}"
 
-            conn.execute("""
-                UPDATE products 
-                SET name=?, price=?, category=?, image=?, available=?, condition=?, storage=?, ram=? 
-                WHERE id=?
-            """, (name, price, category, image_path, available, condition, storage, ram, id))
-            conn.commit()
-            conn.close()
+            supabase.table('products').update({
+                "name": name,
+                "price": price,
+                "category": category,
+                "image": image_path,
+                "available": available,
+                "condition": condition,
+                "storage": storage,
+                "ram": ram
+            }).eq('id', id).execute()
+
             return redirect(url_for('admin'))
         except Exception as e:
-            conn.close()
             return f"<h3>حدث خطأ أثناء التعديل:</h3><p>{str(e)}</p>", 500
 
-    conn.close()
     return render_template('edit_product.html', product=product)
 
 # حذف منتج
 @app.route('/admin/delete/<int:id>')
 @requires_auth
 def delete_product(id):
-    conn = get_db_connection()
-    conn.execute("DELETE FROM products WHERE id = ?", (id,))
-    conn.commit()
-    conn.close()
+    try:
+        supabase.table('products').delete().eq('id', id).execute()
+    except:
+        pass
     return redirect(url_for('admin'))
 
 # صفحة طباعة ملصق الـ QR Code
@@ -210,7 +196,7 @@ def store_qr():
     store_url = request.host_url
     return render_template('qr.html', store_name=settings.get('store_name'), store_url=store_url)
 
-# إعدادات المحل (مع تحديث اسم المستخدم وكلمة المرور)
+# إعدادات المحل
 @app.route('/admin/settings', methods=['GET', 'POST'])
 @requires_auth
 def admin_settings():
@@ -225,18 +211,18 @@ def admin_settings():
         admin_username = request.form.get('admin_username')
         admin_password = request.form.get('admin_password')
 
-        conn = get_db_connection()
-        conn.execute("UPDATE settings SET value = ? WHERE key = 'store_name'", (store_name,))
-        conn.execute("UPDATE settings SET value = ? WHERE key = 'store_whatsapp'", (store_whatsapp,))
-        conn.execute("UPDATE settings SET value = ? WHERE key = 'api_secret_key'", (api_secret_key,))
-        conn.execute("UPDATE settings SET value = ? WHERE key = 'admin_username'", (admin_username,))
-        if admin_password:
-            conn.execute("UPDATE settings SET value = ? WHERE key = 'admin_password'", (admin_password,))
-        conn.commit()
-        conn.close()
-
-        success = "تم حفظ الإعدادات بنجاح!"
-        settings = get_settings()
+        try:
+            supabase.table('settings').upsert({"key": "store_name", "value": store_name}).execute()
+            supabase.table('settings').upsert({"key": "store_whatsapp", "value": store_whatsapp}).execute()
+            supabase.table('settings').upsert({"key": "api_secret_key", "value": api_secret_key}).execute()
+            supabase.table('settings').upsert({"key": "admin_username", "value": admin_username}).execute()
+            if admin_password:
+                supabase.table('settings').upsert({"key": "admin_password", "value": admin_password}).execute()
+            
+            success = "تم حفظ الإعدادات بنجاح!"
+            settings = get_settings()
+        except Exception as e:
+            error = str(e)
 
     return render_template('admin_settings.html',
                            store_name=settings.get('store_name'),
@@ -261,7 +247,6 @@ def upload_csv():
             stream = io.TextIOWrapper(file.stream, encoding='utf-8')
             reader = csv.DictReader(stream)
 
-            conn = get_db_connection()
             for row in reader:
                 name = str(row.get('name', '')).strip()
                 price = float(row.get('price', 0) or 0)
@@ -272,15 +257,27 @@ def upload_csv():
                 ram = str(row.get('ram', '')).strip()
 
                 if name:
-                    existing = conn.execute("SELECT id FROM products WHERE name = ?", (name,)).fetchone()
-                    if existing:
-                        conn.execute("UPDATE products SET price = ?, category = ?, condition = ?, storage = ?, ram = ? WHERE id = ?",
-                                     (price, category, condition, storage, ram, existing['id']))
+                    res = supabase.table('products').select("id").eq('name', name).execute()
+                    if res.data:
+                        prod_id = res.data[0]['id']
+                        supabase.table('products').update({
+                            "price": price,
+                            "category": category,
+                            "condition": condition,
+                            "storage": storage,
+                            "ram": ram
+                        }).eq('id', prod_id).execute()
                     else:
-                        conn.execute("INSERT INTO products (name, price, category, image, condition, storage, ram) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                     (name, price, category, image, condition, storage, ram))
-            conn.commit()
-            conn.close()
+                        supabase.table('products').insert({
+                            "name": name,
+                            "price": price,
+                            "category": category,
+                            "image": image,
+                            "available": 1,
+                            "condition": condition,
+                            "storage": storage,
+                            "ram": ram
+                        }).execute()
         except Exception as e:
             print("CSV Error:", e)
 
@@ -302,50 +299,40 @@ def api_update_stock():
 
     product_id = data.get('product_id')
     product_name = data.get('name')
-    new_price = data.get('price')
-    available = data.get('available')
-    condition = data.get('condition')
-    storage = data.get('storage')
-    ram = data.get('ram')
 
-    conn = get_db_connection()
-    product = None
-    if product_id:
-        product = conn.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
-    elif product_name:
-        product = conn.execute("SELECT * FROM products WHERE name = ?", (product_name,)).fetchone()
+    try:
+        query = supabase.table('products').select("*")
+        if product_id:
+            query = query.eq('id', product_id)
+        elif product_name:
+            query = query.eq('name', product_name)
+        else:
+            return jsonify({"status": "error", "message": "Product not found"}), 404
 
-    if not product:
-        conn.close()
-        return jsonify({"status": "error", "message": "Product not found"}), 404
+        res = query.execute()
+        if not res.data:
+            return jsonify({"status": "error", "message": "Product not found"}), 404
+        
+        product = res.data[0]
+        update_data = {}
+        
+        if data.get('price') is not None:
+            update_data['price'] = data.get('price')
+        if data.get('available') is not None:
+            update_data['available'] = data.get('available')
+        if data.get('condition') is not None:
+            update_data['condition'] = data.get('condition')
+        if data.get('storage') is not None:
+            update_data['storage'] = data.get('storage')
+        if data.get('ram') is not None:
+            update_data['ram'] = data.get('ram')
 
-    query = "UPDATE products SET "
-    params = []
+        if update_data:
+            supabase.table('products').update(update_data).eq('id', product['id']).execute()
 
-    if new_price is not None:
-        query += "price = ?, "
-        params.append(new_price)
-    if available is not None:
-        query += "available = ?, "
-        params.append(available)
-    if condition is not None:
-        query += "condition = ?, "
-        params.append(condition)
-    if storage is not None:
-        query += "storage = ?, "
-        params.append(storage)
-    if ram is not None:
-        query += "ram = ?, "
-        params.append(ram)
-
-    query = query.rstrip(', ') + " WHERE id = ?"
-    params.append(product['id'])
-
-    conn.execute(query, params)
-    conn.commit()
-    conn.close()
-
-    return jsonify({"status": "success", "message": "Stock/Price updated successfully!"}), 200
+        return jsonify({"status": "success", "message": "Stock/Price updated successfully!"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
