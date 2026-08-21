@@ -1,6 +1,6 @@
 # Demo Store
 
-#### Video Demo: <ADD YOUTUBE LINK HERE AFTER UPLOADING>
+#### Video Demo: <[Https://youtu.be/PVdHy1XxjD4?si=HdBSUCO7c8YasbsI>
 
 #### Description:
 
